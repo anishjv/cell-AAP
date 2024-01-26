@@ -94,6 +94,7 @@ def crop_regions(image_file, image, box_size):
             regions: dictionary of cropped roi's, labeled 'Frame_i_cell_j
             discarded_box_counter: dictionary of integers, integer corresponds to the number of roi's that had to be discarded due to be 'incomplete',
             i.e. spilling out of the image
+            coords: a dictionary specifying the locational coordinates (x_bottom_left, y_bottom_left) and (x_top_right, y_top_right) for each ROI
     """
 
     assert isinstance(box_size, int)
@@ -108,9 +109,8 @@ def crop_regions(image_file, image, box_size):
 
     regions = {}
     discarded_box_counter = {}
+    coords = {}
 
-    # Generating bounding box coordinates from the centroid coordinates provided by skimage
-    # The discarded box counter ensures that indexing is sequential, for convienience
     for i in range(len(list(image_region_props))):
         discarded_box_counter[f"Frame_{i}"] = 0
 
@@ -120,21 +120,18 @@ def crop_regions(image_file, image, box_size):
             x1, y1 = x - box_size, y + box_size  # top left
             x2, y2 = x + box_size, y - box_size  # bottom right
 
-            # Using PIL to crop out a region given the bounding box coordinates
-            # Here we specify that a region should only be cropped out if it is a 'complete region' i.e. not spilling out of the image
+            coords_temp = [x1, y1, x2, y2]
 
-            coords = [x1, y1, x2, y2]
-
-            if all(i >= 0 and i <= 2048 for i in coords) == True:
+            if all(i >= 0 and i <= 2048 for i in coords_temp) == True:
                 image = pil_image_dict[f"Frame_{i}"]
                 region = np.array(image.crop((x1, y2, x2, y1)))
-                regions[
-                    f"Frame_{i}_cell_{j - discarded_box_counter[f'Frame_{i}']}"
-                ] = region
+                regions[f"Frame_{i}_cell_{j - discarded_box_counter[f'Frame_{i}']}"] = region
+
+                coords[f"Frame_{i}_cell_{j - discarded_box_counter[f'Frame_{i}']}"] = coords_temp
             else:
                 discarded_box_counter[f"Frame_{i}"] += 1
 
-    return regions, discarded_box_counter, image_region_props
+    return regions, discarded_box_counter, image_region_props, coords
 
 
 def counter(image_region_props, discarded_box_counter):
@@ -201,6 +198,7 @@ class Processor:
         self.cleaned_binary_roi = None
         self.cleaned_scalar_roi = None
         self.roi_dict = None
+        self.coords = None
 
     def __str__(self):
         return "Instance of class, Processor, implemented to process microscopy images into regions of interest"
@@ -209,7 +207,7 @@ class Processor:
     def get(cls, props_list):
         image_file = input("Enter path of tiff image file: ")
         image_stack = tiff.imread(image_file)
-        roi_size = input("Enter ROI size")
+        roi_size = int(input("Enter ROI size"))
         return cls(image_file, image_stack, roi_size, props_list)
 
     @property
@@ -218,8 +216,9 @@ class Processor:
 
     @image_file.setter
     def image_file(self, image_file):
-        if "tif" or "tiff" not in image_file:
-            raise ValueError("Image must be a tiff file")
+        if "tiff" not in image_file:
+            if 'tiff' not in image_file:
+                raise ValueError("Image must be a tiff file")
         self._image_file = image_file
 
     @property
@@ -227,15 +226,15 @@ class Processor:
         return self._image_stack
 
     @image_stack.setter
-    def image_stack(self, image_stack, image_file):
-        if image_stack != tiff.imread(image_file):
+    def image_stack(self, image_stack):
+        if image_stack.all() != tiff.imread(self.image_file).all():
             raise ValueError(
                 "Image_stack should be the ouput of line 1 in the class_method Processor.get()"
             )
         self._image_stack = image_stack
 
     def transform(self):
-        self.roi_dict, discarded_box_counter, region_props_stack = crop_regions(
+        self.roi_dict, discarded_box_counter, region_props_stack, self.coords = crop_regions(
             self.image_file, self.image_stack, self.roi_size
         )
         self.frame_count, self.cell_count = counter(
