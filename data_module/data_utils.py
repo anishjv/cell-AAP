@@ -1,10 +1,11 @@
+import re
 import numpy as np
 from PIL import Image
 import tifffile as tiff
 from skimage.measure import regionprops, regionprops_table, label
 from skimage.morphology import white_tophat, square
 from skimage.segmentation import clear_border
-from skimage.filters import gaussian, threshold_isodata
+from skimage.filters import gaussian, threshold_isodata # pylint: disable=no-name-in-module
 
 
 def preprocess_2d(
@@ -83,7 +84,7 @@ def preprocess_3d(
     return region_props
 
 
-def crop_regions(image_file, image, box_size):
+def crop_regions(image_list, image_stack, box_size):
     """
     INPUTS:
            region_props: dictionary output of skimage.measure function, region_props. Must be the output of that function applied to the starting image stack
@@ -98,14 +99,15 @@ def crop_regions(image_file, image, box_size):
     """
 
     assert isinstance(box_size, int)
+    assert isinstance(image_list, list)
 
     pil_image_dict = {}
 
-    for i in range(image.shape[0]):
-        image_to_append = Image.fromarray(tiff.imread(image_file, key=i))
+    for i in range(image_stack.shape[0]):
+        image_to_append = Image.fromarray(image_stack[i, :, :])
         pil_image_dict[f"Frame_{i}"] = image_to_append
 
-    image_region_props = preprocess_3d(image)
+    image_region_props = preprocess_3d(image_stack)
 
     regions = {}
     discarded_box_counter = {}
@@ -122,7 +124,7 @@ def crop_regions(image_file, image, box_size):
 
             coords_temp = [x1, y1, x2, y2]
 
-            if all(i >= 0 and i <= 2048 for i in coords_temp) == True:
+            if all(k >= 0 and k <= 2048 for k in coords_temp) == True:
                 image = pil_image_dict[f"Frame_{i}"]
                 region = np.array(image.crop((x1, y2, x2, y1)))
                 regions[f"Frame_{i}_cell_{j - discarded_box_counter[f'Frame_{i}']}"] = region
@@ -188,8 +190,8 @@ def clean_regions(
 
 
 class Processor:
-    def __init__(self, image_file, image_stack, roi_size, props_list):
-        self.image_file = image_file
+    def __init__(self, image_list, image_stack, roi_size, props_list):
+        self.image_list = image_list
         self.image_stack = image_stack
         self.roi_size = roi_size
         self.props_list = props_list
@@ -204,22 +206,24 @@ class Processor:
         return "Instance of class, Processor, implemented to process microscopy images into regions of interest"
 
     @classmethod
-    def get(cls, props_list):
-        image_file = input("Enter path of tiff image file: ")
-        image_stack = tiff.imread(image_file)
-        roi_size = int(input("Enter ROI size"))
-        return cls(image_file, image_stack, roi_size, props_list)
+    def get(cls, props_list, image_list, roi_size):
+        image_stack = tiff.imread(image_list[0])
+        for i in range(len(image_list) - 1):
+            image_stack.concatenate(tiff.imread(image_list[i+1]))
+        return cls(image_list, image_stack, roi_size, props_list)
 
     @property
-    def image_file(self):
-        return self._image_file
+    def image_list(self):
+        return self._image_list
 
-    @image_file.setter
-    def image_file(self, image_file):
-        if "tiff" not in image_file:
-            if 'tiff' not in image_file:
+    @image_list.setter
+    def image_list(self, image_list):
+        for i in image_list:
+            if re.search(r'^.+\.(?:(?:[tT][iI][fF][fF]?)|(?:[tT][iI][fF]))$', i) == None:
                 raise ValueError("Image must be a tiff file")
-        self._image_file = image_file
+            else:
+                pass
+        self._image_list = image_list
 
     @property
     def image_stack(self):
@@ -227,15 +231,11 @@ class Processor:
 
     @image_stack.setter
     def image_stack(self, image_stack):
-        if image_stack.all() != tiff.imread(self.image_file).all():
-            raise ValueError(
-                "Image_stack should be the ouput of line 1 in the class_method Processor.get()"
-            )
         self._image_stack = image_stack
 
     def transform(self):
         self.roi_dict, discarded_box_counter, region_props_stack, self.coords = crop_regions(
-            self.image_file, self.image_stack, self.roi_size
+            self.image_list, self.image_stack, self.roi_size
         )
         self.frame_count, self.cell_count = counter(
             region_props_stack, discarded_box_counter
