@@ -56,7 +56,6 @@ def preprocess_3d(
         trackseg    = label stack filtered by size to remove non-nuclei
     """
 
-    # mask = erosion(mask)
     try:
         assert nucsize_min > 0 and nucsize_max > 0
     except Exception as error:
@@ -154,8 +153,7 @@ def counter(image_region_props, discarded_box_counter):
     for i in range(frame_count):
         cell_count_dict[f"Frame_{i}"] = (
             len((image_region_props[f"Frame_{i}"]))
-            - discarded_box_counter[f"Frame_{i}"]
-        )
+            - discarded_box_counter[f"Frame_{i}"])
 
     return frame_count, cell_count_dict
 
@@ -189,7 +187,17 @@ def clean_regions(
     return cleaned_regions, cleaned_intensity_regions
 
 
-class Processor:
+def add_labels(data_frame, labels):
+        if len(labels.shape) == len(data_frame.shape):
+            if labels.shape[0] == data_frame.shape[0]:
+                data_frame = np.append(data_frame, labels, axis = 1)
+        else:
+            data_frame = np.append(data_frame, np.reshape(labels, (data_frame.shape[0], 1)), axis = 1)
+
+        return data_frame
+
+
+class ROI:
     def __init__(self, image_list, image_stack, roi_size, props_list):
         self.image_list = image_list
         self.image_stack = image_stack
@@ -199,8 +207,11 @@ class Processor:
         self.cell_count = None
         self.cleaned_binary_roi = None
         self.cleaned_scalar_roi = None
-        self.roi_dict = None
+        self.roi = None
+        self.labels = None
         self.coords = None
+        self.cropped = False
+        self.df_generated = False
 
     def __str__(self):
         return "Instance of class, Processor, implemented to process microscopy images into regions of interest"
@@ -233,18 +244,19 @@ class Processor:
     def image_stack(self, image_stack):
         self._image_stack = image_stack
 
-    def transform(self):
-        self.roi_dict, discarded_box_counter, region_props_stack, self.coords = crop_regions(
+    def crop(self):
+        self.roi, discarded_box_counter, region_props_stack, self.coords = crop_regions(
             self.image_list, self.image_stack, self.roi_size
         )
         self.frame_count, self.cell_count = counter(
             region_props_stack, discarded_box_counter
         )
         self.cleaned_binary_roi, self.cleaned_scalar_roi = clean_regions(
-            self.roi_dict,
+            self.roi,
             self.frame_count,
             self.cell_count,
         )
+        self.cropped = True
         return self
 
     def gen_df(self):
@@ -264,7 +276,10 @@ class Processor:
             Given a dictionary of ROI's, this function will generate a dataframe containing values of selected skimage properties, one per ROI.
 
         """
-
+        try:
+            assert(self.cropped == True)
+        except Exception as error:
+            raise AssertionError('the method, crop(), must be called before the method gen_df()')
         try:
             assert isinstance(self.props_list, list)
         except Exception as error:
@@ -303,5 +318,6 @@ class Processor:
                     main_df = np.append(main_df, df, axis=0)
                 else:
                     pass
-
+        
         return main_df
+    
