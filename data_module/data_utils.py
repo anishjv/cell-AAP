@@ -5,7 +5,10 @@ import tifffile as tiff
 from skimage.measure import regionprops, regionprops_table, label
 from skimage.morphology import white_tophat, square
 from skimage.segmentation import clear_border
-from skimage.filters import gaussian, threshold_isodata # pylint: disable=no-name-in-module
+from skimage.filters import (
+    gaussian,
+    threshold_isodata,
+)  # pylint: disable=no-name-in-module
 
 
 def preprocess_2d(
@@ -126,9 +129,13 @@ def crop_regions(image_list, image_stack, box_size):
             if all(k >= 0 and k <= 2048 for k in coords_temp) == True:
                 image = pil_image_dict[f"Frame_{i}"]
                 region = np.array(image.crop((x1, y2, x2, y1)))
-                regions[f"Frame_{i}_cell_{j - discarded_box_counter[f'Frame_{i}']}"] = region
+                regions[
+                    f"Frame_{i}_cell_{j - discarded_box_counter[f'Frame_{i}']}"
+                ] = region
 
-                coords[f"Frame_{i}_cell_{j - discarded_box_counter[f'Frame_{i}']}"] = coords_temp
+                coords[
+                    f"Frame_{i}_cell_{j - discarded_box_counter[f'Frame_{i}']}"
+                ] = coords_temp
             else:
                 discarded_box_counter[f"Frame_{i}"] += 1
 
@@ -153,14 +160,13 @@ def counter(image_region_props, discarded_box_counter):
     for i in range(frame_count):
         cell_count_dict[f"Frame_{i}"] = (
             len((image_region_props[f"Frame_{i}"]))
-            - discarded_box_counter[f"Frame_{i}"])
+            - discarded_box_counter[f"Frame_{i}"]
+        )
 
     return frame_count, cell_count_dict
 
 
-def clean_regions(
-    regions, frame_count, cell_count
-):
+def clean_regions(regions, frame_count, cell_count):
     """
     INPUTS:
           regions: must the output of 'crop_regions', is a dict containg all cropped regions
@@ -188,13 +194,15 @@ def clean_regions(
 
 
 def add_labels(data_frame, labels):
-        if len(labels.shape) == len(data_frame.shape):
-            if labels.shape[0] == data_frame.shape[0]:
-                data_frame = np.append(data_frame, labels, axis = 1)
-        else:
-            data_frame = np.append(data_frame, np.reshape(labels, (data_frame.shape[0], 1)), axis = 1)
+    if len(labels.shape) == len(data_frame.shape):
+        if labels.shape[0] == data_frame.shape[0]:
+            data_frame = np.append(data_frame, labels, axis=1)
+    else:
+        data_frame = np.append(
+            data_frame, np.reshape(labels, (data_frame.shape[0], 1)), axis=1
+        )
 
-        return data_frame
+    return data_frame
 
 
 class ROI:
@@ -220,7 +228,7 @@ class ROI:
     def get(cls, props_list, image_list, roi_size):
         image_stack = tiff.imread(image_list[0])
         for i in range(len(image_list) - 1):
-            image_stack.concatenate(tiff.imread(image_list[i+1]))
+            image_stack.concatenate(tiff.imread(image_list[i + 1]))
         return cls(image_list, image_stack, roi_size, props_list)
 
     @property
@@ -230,7 +238,10 @@ class ROI:
     @image_list.setter
     def image_list(self, image_list):
         for i in image_list:
-            if re.search(r'^.+\.(?:(?:[tT][iI][fF][fF]?)|(?:[tT][iI][fF]))$', i) == None:
+            if (
+                re.search(r"^.+\.(?:(?:[tT][iI][fF][fF]?)|(?:[tT][iI][fF]))$", i)
+                == None
+            ):
                 raise ValueError("Image must be a tiff file")
             else:
                 pass
@@ -277,9 +288,11 @@ class ROI:
 
         """
         try:
-            assert(self.cropped == True)
+            assert self.cropped == True
         except Exception as error:
-            raise AssertionError('the method, crop(), must be called before the method gen_df()')
+            raise AssertionError(
+                "the method, crop(), must be called before the method gen_df()"
+            )
         try:
             assert isinstance(self.props_list, list)
         except Exception as error:
@@ -299,7 +312,9 @@ class ROI:
         try:
             assert self.props_list[0] == "area"
         except Exception as error:
-            raise AssertionError("area must be the first element of props_list") from error 
+            raise AssertionError(
+                "area must be the first element of props_list"
+            ) from error
 
         main_df = np.empty(shape=(0, len(self.props_list) + 3))
 
@@ -318,6 +333,5 @@ class ROI:
                     main_df = np.append(main_df, df, axis=0)
                 else:
                     pass
-        
+
         return main_df
-    
