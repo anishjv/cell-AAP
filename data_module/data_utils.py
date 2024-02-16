@@ -5,10 +5,7 @@ import tifffile as tiff
 from skimage.measure import regionprops, regionprops_table, label
 from skimage.morphology import white_tophat, square
 from skimage.segmentation import clear_border
-from skimage.filters import (
-    gaussian,
-    threshold_isodata,
-)  # pylint: disable=no-name-in-module
+from skimage.filters import gaussian, threshold_isodata # pylint: disable=no-name-in-module
 
 
 def preprocess_2d(
@@ -38,7 +35,7 @@ def preprocess_2d(
         im, strel_cell
     )  # Background subtraction + uneven illumination correction
     thresh_im = threshold_isodata(im)  # find threshold value
-    redseg = im > (thresh_im / 4)  # only keep pixels above the threshold
+    redseg = im > (thresh_im / 4) # only keep pixels above the threshold
     lblred = label(redseg)
     labels = label(lblred)
 
@@ -190,7 +187,7 @@ def clean_regions(regions, frame_count, cell_count):
             )
             cleaned_regions[f"Frame_{i}_cell_{j}"] = label(cleaned_mask)
 
-    return cleaned_regions, cleaned_intensity_regions
+    return cleaned_regions, cleaned_intensity_regions, mask
 
 
 def add_labels(data_frame, labels):
@@ -215,6 +212,7 @@ class ROI:
         self.cell_count = None
         self.cleaned_binary_roi = None
         self.cleaned_scalar_roi = None
+        self.mask = None
         self.roi = None
         self.labels = None
         self.coords = None
@@ -227,8 +225,9 @@ class ROI:
     @classmethod
     def get(cls, props_list, image_list, roi_size):
         image_stack = tiff.imread(image_list[0])
-        for i in range(len(image_list) - 1):
-            image_stack.concatenate(tiff.imread(image_list[i + 1]))
+        if len(image_list) > 1:
+            for i in range(len(image_list) - 1):
+                image_stack = np.concatenate((image_stack, tiff.imread(image_list[i + 1])), axis = 0)
         return cls(image_list, image_stack, roi_size, props_list)
 
     @property
@@ -262,7 +261,7 @@ class ROI:
         self.frame_count, self.cell_count = counter(
             region_props_stack, discarded_box_counter
         )
-        self.cleaned_binary_roi, self.cleaned_scalar_roi = clean_regions(
+        self.cleaned_binary_roi, self.cleaned_scalar_roi, self.mask = clean_regions(
             self.roi,
             self.frame_count,
             self.cell_count,
