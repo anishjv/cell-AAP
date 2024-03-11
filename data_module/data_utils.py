@@ -376,7 +376,7 @@ class ROI:
             )  
 
         self.frame_count, self.cell_count = counter(
-            region_props_stack, discarded_box_counter
+            region_props_stack, self.discarded_box_counter
         )
         self.cleaned_binary_roi, self.cleaned_scalar_roi, self.masks = clean_regions(
             self.roi,
