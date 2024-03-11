@@ -83,7 +83,7 @@ def preprocess_3d(
     return region_props
 
 
-def tiff_to_rgb(image, max_pixel_value = 255, min_pixel_value = 0):
+def bw_to_rgb(image, max_pixel_value = 255, min_pixel_value = 0):
     '''
     Converts a tiffile of shape (x, y) to a file of shape (3, x, y) where each (x, y) frame of the first dimension corresponds to a color
     INPUTS:
@@ -219,7 +219,7 @@ def crop_regions_predict(dna_image_stack, box_size, phase_image_stack, predictor
                 coords[f"Frame_{i}_cell_{j - discarded_box_counter[f'Frame_{i}']}"] = coords_temp
          
                 if sam_current_image != sam_previous_image or sam_previous_image == None:
-                    phase_image_rgb = tiff_to_rgb(pil_phase_image_dict[sam_current_image])
+                    phase_image_rgb = bw_to_rgb(pil_phase_image_dict[sam_current_image])
                     predictor.set_image(phase_image_rgb)
                     sam_previous_image = sam_current_image                    
                 
@@ -327,16 +327,16 @@ class ROI:
         return "Instance of class, Processor, implemented to process microscopy images into regions of interest"
 
     @classmethod
-    def get(cls, props_list, dna_image_list, phase_image_list, roi_size, predictor):
-        dna_image_stack = tiff.imread(dna_image_list[0])
-        phase_image_stack = tiff.imread(phase_image_list[0])
+    def get(cls, props_list, dna_image_list, phase_image_list, roi_size, predictor, frame_step = 1):
+        dna_image_stack = tiff.imread(dna_image_list[0])[0::frame_step, :, :]
+        phase_image_stack = tiff.imread(phase_image_list[0])[0::frame_step, :, :]
         if len(dna_image_list) > 1:
             for i in range(len(dna_image_list) - 1):
-                dna_image_stack = np.concatenate((dna_image_stack, tiff.imread(dna_image_list[i + 1])), axis = 0)
+                dna_image_stack = np.concatenate( (dna_image_stack, tiff.imread(dna_image_list[i + 1])[0::frame_step, :, :]), axis = 0)
 
         if len(phase_image_list) > 1:
             for i in range(len(phase_image_list) - 1):
-                phase_image_stack = np.concatenate((phase_image_stack, tiff.imread(phase_image_list[i + 1])), axis = 0)
+                phase_image_stack = np.concatenate( (phase_image_stack, tiff.imread(phase_image_list[i + 1])[0::frame_step, :, :]), axis = 0)
 
         return cls(dna_image_list, dna_image_stack, phase_image_list, phase_image_stack, roi_size, props_list, predictor)
 
@@ -366,7 +366,7 @@ class ROI:
 
     def crop(self, segment = True):
         if segment == True:
-            self.roi, discarded_box_counter, region_props_stack, self.coords, self.segmentations = crop_regions_predict(
+            self.roi, self.discarded_box_counter, region_props_stack, self.coords, self.segmentations = crop_regions_predict(
                 self.dna_image_stack, self.roi_size, self.phase_image_stack, self.predictor
             )
         
