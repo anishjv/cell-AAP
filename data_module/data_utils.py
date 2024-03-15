@@ -9,7 +9,7 @@ from skimage.segmentation import clear_border
 from skimage.filters import gaussian, threshold_isodata # pylint: disable=no-name-in-module
 
 def preprocess_2d(
-    image, strel_cell=square(71), nucsize_min=int(500), nucsize_max=int(2800), threshold_division =4
+    image, strel_cell=square(71), nucsize_min=int(500), nucsize_max=int(2800), threshold_division =0.5
 ):
     """
     Preprocesses a specified image
