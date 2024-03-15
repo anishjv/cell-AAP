@@ -371,7 +371,7 @@ class ROI:
             )
         
         else:
-            self.roi, discarded_box_counter, region_props_stack, self.coords = crop_regions(
+            self.roi, self.discarded_box_counter, region_props_stack, self.coords = crop_regions(
                 self.dna_image_list, self.dna_image_stack, self.roi_size
             )  
 
