@@ -9,8 +9,7 @@ from skimage.segmentation import clear_border
 from skimage.filters import gaussian, threshold_isodata # pylint: disable=no-name-in-module
 
 def preprocess_2d(
-    image, strel_cell=square(9), nucsize_min=int(500), nucsize_max=int(2800), threshold_division =0.5
-):
+    image, threshold_division, sigma, strel_cell=square(71), nucsize_min=int(500), nucsize_max=int(2800)):
     """
     Preprocesses a specified image
     INPUTS:
@@ -30,7 +29,7 @@ def preprocess_2d(
         print("Swapping max and min size values!")
         nucsize_min, nucsize_max = nucsize_max, nucsize_min
 
-    im = gaussian(image, sigma=3)  # 2D gaussian smoothing filter to reduce noise
+    im = gaussian(image, sigma)  # 2D gaussian smoothing filter to reduce noise
     im = white_tophat(
         im, strel_cell
     )  # Background subtraction + uneven illumination correction
@@ -43,8 +42,7 @@ def preprocess_2d(
 
 
 def preprocess_3d(
-    targetstack, strel_cell=square(71), nucsize_min=int(500), nucsize_max=int(2800)
-):
+    targetstack, strel_cell=square(71), nucsize_min=int(500), nucsize_max=int(2800)):
     """
     Preprocesses the specified plane from the targetstack
     INPUTS:
@@ -261,7 +259,7 @@ def counter(image_region_props, discarded_box_counter):
     return frame_count, cell_count_dict
 
 
-def clean_regions(regions, frame_count, cell_count):
+def clean_regions(regions, frame_count, cell_count, threshold_division, sigma):
     """
     INPUTS:
           regions: must the output of 'crop_regions', is a dict containg all cropped regions
@@ -277,16 +275,20 @@ def clean_regions(regions, frame_count, cell_count):
     cleaned_regions = {}
     masks = {}
 
+
     for i in range(frame_count):
         for j in range(cell_count[f"Frame_{i}"]):
-            mask = preprocess_2d(regions[f"Frame_{i}_cell_{j}"])[1]
+            mask = preprocess_2d(regions[f"Frame_{i}_cell_{j}"], threshold_division, sigma)[1]
             cleaned_mask = clear_border(mask)
-            cleaned_intensity_regions[f"Frame_{i}_cell_{j}"] = np.multiply(
-                regions[f"Frame_{i}_cell_{j}"], cleaned_mask
-            )
+            cleaned_intensity_regions[f"Frame_{i}_cell_{j}"] = np.multiply(regions[f"Frame_{i}_cell_{j}"], 
+                                                                            cleaned_mask
+                                                                           )
+                
             cleaned_regions[f"Frame_{i}_cell_{j}"] = label(cleaned_mask)
             masks[f'Frame_{i}_cell_{j}'] = cleaned_mask
-
+            
+       
+                
     return cleaned_regions, cleaned_intensity_regions, masks
 
 
@@ -303,7 +305,7 @@ def add_labels(data_frame, labels):
 
 
 class ROI:
-    def __init__(self, dna_image_list, dna_image_stack, phase_image_list, phase_image_stack, roi_size, props_list, predictor):
+    def __init__(self, dna_image_list, dna_image_stack, phase_image_list, phase_image_stack, roi_size, props_list):
         self.dna_image_list = dna_image_list
         self.dna_image_stack = dna_image_stack
         self.phase_image_list = phase_image_list
@@ -320,14 +322,13 @@ class ROI:
         self.coords = None
         self.cropped = False
         self.df_generated = False
-        self.predictor = predictor
         self.segmentations = None
 
     def __str__(self):
         return "Instance of class, Processor, implemented to process microscopy images into regions of interest"
 
-    @classmethod
-    def get(cls, props_list, dna_image_list, phase_image_list, roi_size, predictor, frame_step = 1):
+    @classmethod 
+    def get(cls, props_list, dna_image_list, phase_image_list, roi_size, frame_step = 1):
         dna_image_stack = tiff.imread(dna_image_list[0])[0::frame_step, :, :]
         phase_image_stack = tiff.imread(phase_image_list[0])[0::frame_step, :, :]
         if len(dna_image_list) > 1:
@@ -338,7 +339,7 @@ class ROI:
             for i in range(len(phase_image_list) - 1):
                 phase_image_stack = np.concatenate( (phase_image_stack, tiff.imread(phase_image_list[i + 1])[0::frame_step, :, :]), axis = 0)
 
-        return cls(dna_image_list, dna_image_stack, phase_image_list, phase_image_stack, roi_size, props_list, predictor)
+        return cls(dna_image_list, dna_image_stack, phase_image_list, phase_image_stack, roi_size, props_list)
 
     @property
     def dna_image_list(self):
@@ -364,10 +365,10 @@ class ROI:
     def dna_image_stack(self, dna_image_stack):
         self._dna_image_stack = dna_image_stack
 
-    def crop(self, segment = True):
-        if segment == True:
+    def crop(self, threshold_division, sigma, segment = True, predictor = None):
+        if segment == True and predictor != None:
             self.roi, self.discarded_box_counter, region_props_stack, self.coords, self.segmentations = crop_regions_predict(
-                self.dna_image_stack, self.roi_size, self.phase_image_stack, self.predictor
+                self.dna_image_stack, self.roi_size, self.phase_image_stack, predictor
             )
         
         else:
@@ -382,12 +383,14 @@ class ROI:
             self.roi,
             self.frame_count,
             self.cell_count,
+            threshold_division,
+            sigma
         )
         self.cropped = True
         return self
+    
 
-
-    def gen_df(self):
+    def gen_df(self, extra_props):
         """
         INPUTS:
             props_list: a list of all the properties (that can be generated from boolean masks) wished to be included in the final dataframe
@@ -426,30 +429,33 @@ class ROI:
             raise AssertionError(
                 "cell_count must contain the same number of frames as specified by frame_count"
             ) from error
-        try:
-            assert self.props_list[0] == "area"
-        except Exception as error:
-            raise AssertionError(
-                "area must be the first element of props_list"
-            ) from error
 
-        main_df = np.empty(shape=(0, len(self.props_list) + 3))
+            
+        main_df = np.empty(shape=(0, len(self.props_list) + 3 + len(extra_props)))
 
         for i in range(self.frame_count):
             for j in range(self.cell_count[f"Frame_{i}"]):
-                props = regionprops_table(
-                    self.cleaned_binary_roi[f"Frame_{i}_cell_{j}"],
-                    intensity_image=self.cleaned_scalar_roi[f"Frame_{i}_cell_{j}"],
-                    properties=self.props_list,
-                )
-
-                df = np.array(list(props.values())).T
-                if df.shape == (1, 15):
-                    tracker = [[i, j]]
-                    df = np.append(df, tracker, axis=1)
-                    main_df = np.append(main_df, df, axis=0)
+                if self.cleaned_binary_roi[f"Frame_{i}_cell_{j}"].any() != 0:
+                    props = regionprops_table(
+                                              self.cleaned_binary_roi[f"Frame_{i}_cell_{j}"],
+                                              intensity_image=self.cleaned_scalar_roi[f"Frame_{i}_cell_{j}"],
+                                              properties=self.props_list,
+                                              extra_properties = extra_props
+                                              )
+                   
+                    df = np.array(list(props.values())).T
+                    if df.shape == (1, len(self.props_list)+1+len(extra_props)):
+                        tracker = [[i, j]]
+                        df = np.append(df, tracker, axis=1)
+                        main_df = np.append(main_df, df, axis=0)
+                    else:
+                        self.cell_count[f'Frame_{i}'] -= 1
+                        pass
+                   
                 else:
+                    self.cell_count[f'Frame_{i}'] -= 1
                     pass
+    
 
         return main_df
 
