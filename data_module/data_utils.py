@@ -403,12 +403,12 @@ class ROI:
             props_list: a list of all the properties (that can be generated from boolean masks) wished to be included in the final dataframe
             intense_props_list: a list of all the properties (that can be generated from scalar values images) wished to be included in the final dataframe
             frame_count: an int with a value equal to the number of frames in the image stack of interest
-            cell_count: a dict containing one key per frame of the image stack of interest, the value of each key is the number of cells on that frame
-            cleaned_regions: a dict with one key per cell, the value of each key being an 84X84 boolean array representation of a cell. Each key is labeled, 'Frame_i_cell_j'
-            cleaned_intense_regions: a dict with one key per cell, the value of each key being an 84X84 scalar values array representation of a cell. Each key is labeled 'Frame_i_cell_j'
+            cell_count: list, vector containing one coloumn per frame of the image stack of interest, the value of each key is the number of cells on that frame
+            cleaned_regions: list, rank 4 tensor containing cleaned, binary DNA image ROIs, can be indexed as cleaned_regions[mu][nu] where mu represents the frame and nu represents the cell
+            cleaned_intensity_regions: list, rank 4 tensor containing cleaned, sclar valued DNA image ROIs, can be indexed in the same manner as cleaned_regions
 
         OUTPUTS:
-            main_df: a pandas dataframe containing the values for each property for each cell in 'cleaned_regions'. The dataframe stores no knowledge of the frame from which a cell came.
+            main_df: a vectorized dataframe containing the values for each property for each cell in 'cleaned_regions'. The dataframe stores no knowledge of the frame from which a cell came.
 
         SUMMARY:
             Given a dictionary of ROI's, this function will generate a dataframe containing values of selected skimage properties, one per ROI.
@@ -425,7 +425,7 @@ class ROI:
         except Exception as error:
             raise AssertionError("props_list must be of type 'list'") from error
         try:
-            assert isinstance(self.cell_count, dict)
+            assert isinstance(self.cell_count, list)
         except Exception as error:
             raise AssertionError(
                 "cell_count must of type 'dict', each entry in the dictionary should contain the number of cells in a corresponding frame"
@@ -441,11 +441,11 @@ class ROI:
         main_df = np.empty(shape=(0, len(self.props_list) + 3 + len(extra_props)))
 
         for i in range(self.frame_count):
-            for j in range(self.cell_count[f"Frame_{i}"]):
-                if self.cleaned_binary_roi[f"Frame_{i}_cell_{j}"].any() != 0:
+            for j in range(self.cell_count[i]):
+                if self.cleaned_binary_roi[i][j].any() != 0:
                     props = regionprops_table(
-                                              self.cleaned_binary_roi[f"Frame_{i}_cell_{j}"],
-                                              intensity_image=self.cleaned_scalar_roi[f"Frame_{i}_cell_{j}"],
+                                              self.cleaned_binary_roi[i][j],
+                                              intensity_image=self.cleaned_scalar_roi[i][j],
                                               properties=self.props_list,
                                               extra_properties = extra_props
                                               )
@@ -456,11 +456,11 @@ class ROI:
                         df = np.append(df, tracker, axis=1)
                         main_df = np.append(main_df, df, axis=0)
                     else:
-                        self.cell_count[f'Frame_{i}'] -= 1
+                        self.cell_count[i] -= 1
                         pass
                    
                 else:
-                    self.cell_count[f'Frame_{i}'] -= 1
+                    self.cell_count[i] -= 1
                     pass
     
 
