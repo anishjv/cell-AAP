@@ -15,6 +15,7 @@ from skimage.filters import (
 def preprocess_2d(image, threshold_division, sigma, strel_cell=square(71)):
     """
     Preprocesses a specified image
+    ------------------------------
     INPUTS:
         image
         strel_cell  = structuring element for white_tophat
@@ -39,7 +40,8 @@ def preprocess_2d(image, threshold_division, sigma, strel_cell=square(71)):
 
 def preprocess_3d(targetstack, strel_cell=square(71)):
     """
-    Preprocesses the specified plane from the targetstack
+    Preprocesses a stack of images
+    ------------------------------
     INPUTS:
         targetstack = [t, x, y] image stack
         plane       = uint(plane number)
@@ -70,6 +72,7 @@ def preprocess_3d(targetstack, strel_cell=square(71)):
 def bw_to_rgb(image, max_pixel_value=255, min_pixel_value=0):
     """
     Converts a tiffile of shape (x, y) to a file of shape (3, x, y) where each (x, y) frame of the first dimension corresponds to a color
+    --------------------------------------------------------------------------------------------------------------------------------------
     INPUTS:
         image: n-darray, an image of shape (x, y)
         max_pixel_value: int, the maximum desired pixel value for the output array
@@ -91,23 +94,24 @@ def bw_to_rgb(image, max_pixel_value=255, min_pixel_value=0):
 
     return rgb_image
 
+
 def get_box_size(region_props, scaling_factor: float):
     """
     INPUTS:
             region_props: skimage object, each index represents a grouping of properties about a given cell
-            scaling factor: the average area of a cell divided by the average area of a nuclei
+            scaling factor: float,  the average area of a cell divided by the average area of a nuclei
     OUTPUTS:
-            bb_side_length: the side length of a bounding box, explicitly returns half the side length
+            half the side length of a bounding box
     """
-    sum_areas = 0
+    areas = []
     for i in range(len(region_props)):
-        sum_areas += region_props[i].area
+        areas.append(region_props[i].area)
 
-    dna_area = sum_areas / len(region_props)
+    dna_area = np.median(np.array(areas))
     phase_area = scaling_factor * dna_area
     bb_side_length = np.sqrt(phase_area)
-    
-    return (bb_side_length / 2)
+
+    return bb_side_length // 2
 
 
 def crop_regions(dna_image_stack, box_size: int):
@@ -128,7 +132,7 @@ def crop_regions(dna_image_stack, box_size: int):
     dna_regions = []
 
     for i in range(len(list(image_region_props))):
-        frame_props = image_region_props[f'Frame_{i}']
+        frame_props = image_region_props[f"Frame_{i}"]
         box_size = get_box_size(image_region_props, scaling_factor=np.e)
         dna_regions_temp = []
         discarded_box_counter = np.append(discarded_box_counter, 0)
@@ -170,7 +174,7 @@ def crop_regions_predict(dna_image_stack, phase_image_stack, predictor):
             i.e. spilling out of the image. can be indexed as discarded_box_counter[mu] where mu is the frame number
             image_region_props: skimage object, region properties for each frame as computed by skimage
             segmentations: rank 4 tensor containing one mask per cell per frame. It can be indexed as segmentations[mu][nu] where mu is the frame number and nu is the cell number
-                           Note: segmentations must converted back to masks in the following way 
+                           Note: segmentations must converted back to masks in the following way
                                 1) mask = np.unpackbits(instance.segmentations[1][i], axis = 0, count = 2048)
                                 2) mask = np.array([mask])
     """
@@ -188,7 +192,7 @@ def crop_regions_predict(dna_image_stack, phase_image_stack, predictor):
     dna_image_region_props = preprocess_3d(dna_image_stack)
 
     for i in range(len(list(dna_image_region_props))):
-        frame_props = dna_image_region_props[f'Frame_{i}']
+        frame_props = dna_image_region_props[f"Frame_{i}"]
         box_size = get_box_size(frame_props, scaling_factor=2.8)
         dna_regions_temp = []
         segmentations_temp = []
@@ -221,12 +225,12 @@ def crop_regions_predict(dna_image_stack, phase_image_stack, predictor):
                     sam_previous_image = sam_current_image
 
                 mask, __, __ = predictor.predict(
-                    point_coords=np.array([ [x, y], [x1+0.5, y1-0.5] ]),
+                    point_coords=np.array([[x, y], [x1 + 0.5, y1 - 0.5]]),
                     point_labels=np.array([1, 0]),
                     box=np.array(phase_coords),
                     multimask_output=False,
                 )
-                segmentations_temp.append(np.packbits(mask[0], axis = 0))
+                segmentations_temp.append(np.packbits(mask[0], axis=0))
 
             else:
                 discarded_box_counter[i] += 1
@@ -284,25 +288,25 @@ def clean_regions(regions, frame_count, cell_count, threshold_division, sigma):
         masks_temp = []
         cleaned_regions_temp = []
         cleaned_intensity_regions_temp = []
-        
+
         for j in range(int(cell_count[i])):
             mask = preprocess_2d(regions[i][j], threshold_division, sigma)[1]
             cleaned_mask = clear_border(mask)
-            cleaned_intensity_regions_temp.append(np.multiply(regions[i][j], cleaned_mask))
+            cleaned_intensity_regions_temp.append(
+                np.multiply(regions[i][j], cleaned_mask)
+            )
             cleaned_regions_temp.append(label(cleaned_mask))
             masks_temp.append(cleaned_mask)
-            
+
         masks.append(masks_temp)
         cleaned_regions.append(cleaned_regions_temp)
         cleaned_intensity_regions.append(cleaned_intensity_regions_temp)
-    
-    masks = np.array(masks, dtype = 'object')
-    cleaned_regions = np.array(cleaned_regions, dtype = 'object')
-    cleaned_intensity_regions = np.array(cleaned_intensity_regions, dtype = 'object')
-       
-                
-    return cleaned_regions, cleaned_intensity_regions, masks
 
+    masks = np.array(masks, dtype="object")
+    cleaned_regions = np.array(cleaned_regions, dtype="object")
+    cleaned_intensity_regions = np.array(cleaned_intensity_regions, dtype="object")
+
+    return cleaned_regions, cleaned_intensity_regions, masks
 
 
 def add_labels(data_frame, labels):
@@ -414,9 +418,12 @@ class ROI:
             )
 
         else:
-            self.roi, self.discarded_box_counter, region_props_stack, self.coords = (
-                crop_regions(self.dna_image_list, self.dna_image_stack)
-            )
+            (
+                self.roi,
+                self.discarded_box_counter,
+                region_props_stack,
+                self.coords,
+            ) = crop_regions(self.dna_image_list, self.dna_image_stack)
 
         self.frame_count, self.cell_count = counter(
             region_props_stack, self.discarded_box_counter
@@ -429,6 +436,8 @@ class ROI:
 
     def gen_df(self, extra_props):
         """
+        Given a dictionary of ROI's, this function will generate a dataframe containing values of selected skimage properties, one per ROI.
+        -----------------------------------------------------------------------------------------------------------------------------------
         INPUTS:
             props_list: a list of all the properties (that can be generated from boolean masks) wished to be included in the final dataframe
             intense_props_list: a list of all the properties (that can be generated from scalar values images) wished to be included in the final dataframe
@@ -439,10 +448,6 @@ class ROI:
 
         OUTPUTS:
             main_df: a vectorized dataframe containing the values for each property for each cell in 'cleaned_regions'. The dataframe stores no knowledge of the frame from which a cell came.
-
-        SUMMARY:
-            Given a dictionary of ROI's, this function will generate a dataframe containing values of selected skimage properties, one per ROI.
-
         """
         try:
             assert self.cropped == True
