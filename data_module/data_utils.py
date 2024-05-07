@@ -57,12 +57,13 @@ def preprocess_3d(targetstack, threshold_division, sigma, strel_cell=square(71))
 
     for i in range(targetstack.shape[0]):
         im = targetstack[i, :, :].copy()
-        im = gaussian(im, sigma=3)  # 2D gaussian smoothing filter to reduce noise
+        im = gaussian(im, sigma)  # 2D gaussian smoothing filter to reduce noise
         im = white_tophat(
             im, strel_cell
         )  # Background subtraction + uneven illumination correction
         thresh_im = threshold_isodata(im)
-        redseg = im > (thresh_im / threshold_division)  # only keep pixels above the threshold
+        im = erosion(im, disk(8))
+        redseg = im > (thresh_im / threshold_division+0.25)  # only keep pixels above the threshold
         lblred = label(redseg)
 
         labels = label(lblred)
@@ -116,11 +117,12 @@ def get_box_size(region_props, scaling_factor: float):
     dna_area = np.median(np.array(areas))
     phase_area = scaling_factor * dna_area
     bb_side_length = np.sqrt(phase_area)
+    print(bb_side_length)
 
     return bb_side_length // 2
 
 
-def crop_regions(dna_image_stack, box_size: int, threshold_division, sigma):
+def crop_regions(dna_image_stack, threshold_division, sigma):
     """
     Given a stack of flouresence microscopy images, D, and corresponding phase images, P, returns regions cropped from D for each cell
     -----------------------------------------------------------------------------------------------------------------------------------
@@ -143,12 +145,12 @@ def crop_regions(dna_image_stack, box_size: int, threshold_division, sigma):
 
     for i in range(len(list(image_region_props))):
         frame_props = image_region_props[f"Frame_{i}"]
-        box_size = get_box_size(image_region_props, scaling_factor=np.e)
+        box_size = get_box_size(frame_props, scaling_factor= (10*np.pi/2))
         dna_regions_temp = []
         discarded_box_counter = np.append(discarded_box_counter, 0)
 
         for j in range(len(image_region_props[f"Frame_{i}"])):
-            y, x = frame_props.centroid
+            y, x = frame_props[j].centroid
 
             x1, y1 = x - box_size, y + box_size  # top left
             x2, y2 = x + box_size, y - box_size  # bottom right
