@@ -58,7 +58,7 @@ def write_coco_conv_dataset(parent_dir, phase_image_stack, segmentations, labele
         if labeled_data_frame[j, -1] == 0:
             cv2.imwrite(
                         f'{int(labeled_data_frame[j, -3])}_{label_to_class[0]}_frame{int(labeled_data_frame[j, -3])}cell{int(labeled_data_frame[j, -2])}.png', 
-                        mask * 255
+                        mask
                         )
         elif labeled_data_frame[j, -1] in [1, 2]:
             cv2.imwrite(
@@ -68,7 +68,7 @@ def write_coco_conv_dataset(parent_dir, phase_image_stack, segmentations, labele
 
     
 
-    for k in range(max(labeled_data_frame[:, -3])):
+    for k in range(int(max(labeled_data_frame[:, -3]))):
         if k <= train_cutoff:
             os.chdir(os.path.join(train_path, 'images'))
         elif k >= val_cutoff:

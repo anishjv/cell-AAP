@@ -63,7 +63,7 @@ def preprocess_3d(targetstack, threshold_division, sigma, strel_cell=square(71))
         )  # Background subtraction + uneven illumination correction
         thresh_im = threshold_isodata(im)
         im = erosion(im, disk(8))
-        redseg = im > (thresh_im / threshold_division+0.25)  # only keep pixels above the threshold
+        redseg = im > (thresh_im / (threshold_division+0.25))  # only keep pixels above the threshold
         lblred = label(redseg)
 
         labels = label(lblred)
@@ -145,7 +145,7 @@ def crop_regions(dna_image_stack, threshold_division, sigma):
 
     for i in range(len(list(image_region_props))):
         frame_props = image_region_props[f"Frame_{i}"]
-        box_size = get_box_size(frame_props, scaling_factor= (10*np.pi/2))
+        box_size = get_box_size(frame_props, scaling_factor= (17*np.pi/4))
         dna_regions_temp = []
         discarded_box_counter = np.append(discarded_box_counter, 0)
 
@@ -209,7 +209,7 @@ def crop_regions_predict(dna_image_stack, phase_image_stack, predictor, threshol
 
     for i in range(len(list(dna_image_region_props))):
         frame_props = dna_image_region_props[f"Frame_{i}"]
-        box_size = get_box_size(frame_props, scaling_factor= (5 * np.pi)/3)
+        box_size = get_box_size(frame_props, scaling_factor= (17 * np.pi)/7)
         dna_regions_temp = []
         segmentations_temp = []
         discarded_box_counter = np.append(discarded_box_counter, 0)
@@ -372,27 +372,26 @@ class ROI:
 
     @classmethod
     def get(cls, props_list, dna_image_list, phase_image_list, frame_step=1):
+
+        try:
+            assert len(dna_image_list) == len(phase_image_list)
+        except Exception as error:
+            raise AssertionError("dna_image_list and phase_image_list must be of the same length (number of files)") from error
+
         dna_image_stack = tiff.imread(dna_image_list[0])[0::frame_step, :, :]
         phase_image_stack = tiff.imread(phase_image_list[0])[0::frame_step, :, :]
         if len(dna_image_list) > 1:
-            for i in range(len(dna_image_list) - 1):
-                dna_image_stack = np.concatenate(
-                    (
-                        dna_image_stack,
-                        tiff.imread(dna_image_list[i + 1])[0::frame_step, :, :],
-                    ),
-                    axis=0,
-                )
+            dna_image_tensor = tiff.imread(dna_image_list)
+            phase_image_tensor = tiff.imread(phase_image_list)
+            dna_tup = ()
+            phase_tup = ()
+            if dna_image_tensor.shape[0] == phase_image_tensor.shape[0]:
+                for i in range(dna_image_tensor.shape[0]):
+                    dna_tup = dna_tup + dna_image_tensor[i][0::frame_step, :, :]
+                    phase_tup = phase_tup + phase_image_list[i][0::frame_step, :, :]
 
-        if len(phase_image_list) > 1:
-            for i in range(len(phase_image_list) - 1):
-                phase_image_stack = np.concatenate(
-                    (
-                        phase_image_stack,
-                        tiff.imread(phase_image_list[i + 1])[0::frame_step, :, :],
-                    ),
-                    axis=0,
-                )
+            dna_image_stack = np.concatenate(dna_tup, axis = 0)
+            phase_image_stack = np.concatenate(phase_tup, axis = 0)
 
         return cls(
             dna_image_list,
