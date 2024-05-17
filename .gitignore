@@ -2,8 +2,9 @@
 *.pth
 .DS_Store
 __pycache__
+.ipynb_checkpoints
 datasets/
 models/
 pycococreator/
-notebooks/contour.ipynb
+notebooks/contours.ipynb
 

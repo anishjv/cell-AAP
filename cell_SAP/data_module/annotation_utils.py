@@ -31,7 +31,7 @@ def preprocess_2d(image, threshold_division, sigma, strel_cell=square(71)):
     im = white_tophat(
         im, strel_cell
     )  # Background subtraction + uneven illumination correction
-    thresh_im = threshold_isodata(im) 
+    thresh_im = threshold_isodata(im)
     redseg = im > (
         thresh_im / threshold_division
     )  # only keep pixels above the threshold
@@ -64,7 +64,9 @@ def preprocess_3d(targetstack, threshold_division, sigma, strel_cell=square(71))
         )  # Background subtraction + uneven illumination correction
         thresh_im = threshold_isodata(im)
         im = erosion(im, disk(8))
-        redseg = im > (thresh_im / (threshold_division+0.25))  # only keep pixels above the threshold
+        redseg = im > (
+            thresh_im / (threshold_division + 0.25)
+        )  # only keep pixels above the threshold
         lblred = label(redseg)
 
         labels = label(lblred)
@@ -146,7 +148,7 @@ def crop_regions(dna_image_stack, threshold_division, sigma):
 
     for i in range(len(list(image_region_props))):
         frame_props = image_region_props[f"Frame_{i}"]
-        box_size = get_box_size(frame_props, scaling_factor= (17*np.pi/4))
+        box_size = get_box_size(frame_props, scaling_factor=(17 * np.pi / 4))
         dna_regions_temp = []
         discarded_box_counter = np.append(discarded_box_counter, 0)
 
@@ -170,6 +172,7 @@ def crop_regions(dna_image_stack, threshold_division, sigma):
     dna_regions = np.array(dna_regions, dtype=object)
 
     return dna_regions, discarded_box_counter, image_region_props
+
 
 '''
 def crop_regions_predict(dna_image_stack, phase_image_stack, predictor, threshold_division, sigma):
@@ -262,7 +265,9 @@ def crop_regions_predict(dna_image_stack, phase_image_stack, predictor, threshol
 '''
 
 
-def crop_regions_predict(dna_image_stack, phase_image_stack, predictor, threshold_division, sigma):
+def crop_regions_predict(
+    dna_image_stack, phase_image_stack, predictor, threshold_division, sigma
+):
     """
     Given a stack of flouresence microscopy images, D, and corresponding phase images, P, returns regions cropped from D and masks from P, for each cell
     ------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -302,7 +307,7 @@ def crop_regions_predict(dna_image_stack, phase_image_stack, predictor, threshol
 
     for i in range(len(list(dna_image_region_props))):
         frame_props = dna_image_region_props[f"Frame_{i}"]
-        box_size = get_box_size(frame_props, scaling_factor= (17 * np.pi)/7)
+        box_size = get_box_size(frame_props, scaling_factor=(17 * np.pi) / 7)
         dna_regions_temp = []
         discarded_box_counter = np.append(discarded_box_counter, 0)
         sam_current_image = i
@@ -332,21 +337,26 @@ def crop_regions_predict(dna_image_stack, phase_image_stack, predictor, threshol
                     )
                     predictor.set_image(phase_image_rgb)
                     sam_previous_image = sam_current_image
-                
+
                 if len(boxes) == batch_size:
 
                     input_boxes = torch.tensor(boxes, device=predictor.device)
-                    transformed_boxes = predictor.transform.apply_boxes_torch(input_boxes, phase_image_rgb.shape[:2])
+                    transformed_boxes = predictor.transform.apply_boxes_torch(
+                        input_boxes, phase_image_rgb.shape[:2]
+                    )
                     masks, _, _ = predictor.predict_torch(
-                        point_coords= None,
-                        point_labels= None,
-                        boxes= transformed_boxes,
+                        point_coords=None,
+                        point_labels=None,
+                        boxes=transformed_boxes,
                         multimask_output=False,
                     )
 
                     masks = masks.detach().cpu().numpy()
                     segmentations.append(
-                        [np.packbits(masks[h, 0, :, :], axis=0) for h in range(masks.shape[0])]
+                        [
+                            np.packbits(masks[h, 0, :, :], axis=0)
+                            for h in range(masks.shape[0])
+                        ]
                     )
                     boxes = []
 
@@ -359,6 +369,7 @@ def crop_regions_predict(dna_image_stack, phase_image_stack, predictor, threshol
     segmentations = np.array(segmentations, dtype=object)
 
     return dna_regions, discarded_box_counter, dna_image_region_props, segmentations
+
 
 def counter(image_region_props, discarded_box_counter):
     """
@@ -440,176 +451,3 @@ def add_labels(data_frame, labels):
 
     return data_frame
 
-
-class ROI:
-    def __init__(
-        self,
-        dna_image_list,
-        dna_image_stack,
-        phase_image_list,
-        phase_image_stack,
-        props_list,
-    ):
-        self.dna_image_list = dna_image_list
-        self.dna_image_stack = dna_image_stack
-        self.phase_image_list = phase_image_list
-        self.phase_image_stack = phase_image_stack
-        self.props_list = props_list
-        self.frame_count = None
-        self.cell_count = None
-        self.cleaned_binary_roi = None
-        self.cleaned_scalar_roi = None
-        self.masks = None
-        self.roi = None
-        self.labels = None
-        self.coords = None
-        self.cropped = False
-        self.df_generated = False
-        self.segmentations = None
-
-    def __str__(self):
-        return "Instance of class, Processor, implemented to process microscopy images into regions of interest"
-
-    @classmethod
-    def get(cls, props_list, dna_image_list, phase_image_list, frame_step=1):
-
-        try:
-            assert len(dna_image_list) == len(phase_image_list)
-        except Exception as error:
-            raise AssertionError("dna_image_list and phase_image_list must be of the same length (number of files)") from error
-
-        if len(dna_image_list) > 1:
-            dna_image_tensor = tiff.imread(dna_image_list)
-            phase_image_tensor = tiff.imread(phase_image_list)
-            dna_tup = ()
-            phase_tup = ()
-            if dna_image_tensor.shape[0] == phase_image_tensor.shape[0]:
-                for i in range(dna_image_tensor.shape[0]):
-                    dna_tup = dna_tup + dna_image_tensor[i][0::frame_step, :, :]
-                    phase_tup = phase_tup + phase_image_tensor[i][0::frame_step, :, :]
-
-            dna_image_stack = np.concatenate(dna_tup, axis = 0)
-            phase_image_stack = np.concatenate(phase_tup, axis = 0)
-
-        else:
-            dna_image_stack = tiff.imread(dna_image_list[0])[0::frame_step, :, :]
-            phase_image_stack = tiff.imread(phase_image_list[0])[0::frame_step, :, :]
-
-        return cls(
-            dna_image_list,
-            dna_image_stack,
-            phase_image_list,
-            phase_image_stack,
-            props_list,
-        )
-
-    @property
-    def dna_image_list(self):
-        return self._dna_image_list
-
-    @dna_image_list.setter
-    def dna_image_list(self, dna_image_list):
-        for i in dna_image_list:
-            if (
-                re.search(r"^.+\.(?:(?:[tT][iI][fF][fF]?)|(?:[tT][iI][fF]))$", i)
-                == None
-            ):
-                raise ValueError("Image must be a tiff file")
-            else:
-                pass
-        self._dna_image_list = dna_image_list
-
-    @property
-    def dna_image_stack(self):
-        return self._dna_image_stack
-
-    @dna_image_stack.setter
-    def dna_image_stack(self, dna_image_stack):
-        self._dna_image_stack = dna_image_stack
-
-    def crop(self, threshold_division, sigma, segment=True, predictor=None):
-        if segment == True and predictor != None:
-            (
-                self.roi,
-                self.discarded_box_counter,
-                region_props_stack,
-                self.segmentations,
-            ) = crop_regions_predict(
-                self.dna_image_stack, self.phase_image_stack, predictor, threshold_division, sigma
-            )
-
-        else:
-            (
-                self.roi,
-                self.discarded_box_counter,
-                region_props_stack,
-                self.coords,
-            ) = crop_regions(self.dna_image_list, self.dna_image_stack, threshold_division, sigma)
-
-        self.frame_count, self.cell_count = counter(
-            region_props_stack, self.discarded_box_counter
-        )
-        self.cleaned_binary_roi, self.cleaned_scalar_roi, self.masks = clean_regions(
-            self.roi, self.frame_count, self.cell_count, threshold_division, sigma
-        )
-        self.cropped = True
-        return self
-
-    def gen_df(self, extra_props):
-        """
-        Given a dictionary of ROI's, this function will generate a dataframe containing values of selected skimage properties, one per ROI.
-        -----------------------------------------------------------------------------------------------------------------------------------
-        INPUTS:
-            props_list: a list of all the properties (that can be generated from boolean masks) wished to be included in the final dataframe
-            intense_props_list: a list of all the properties (that can be generated from scalar values images) wished to be included in the final dataframe
-            frame_count: an int with a value equal to the number of frames in the image stack of interest
-            cell_count: list, vector containing one coloumn per frame of the image stack of interest, the value of each key is the number of cells on that frame
-            cleaned_regions: list, rank 4 tensor containing cleaned, binary DNA image ROIs, can be indexed as cleaned_regions[mu][nu] where mu represents the frame and nu represents the cell
-            cleaned_intensity_regions: list, rank 4 tensor containing cleaned, sclar valued DNA image ROIs, can be indexed in the same manner as cleaned_regions
-
-        OUTPUTS:
-            main_df: a vectorized dataframe containing the values for each property for each cell in 'cleaned_regions'. The dataframe stores no knowledge of the frame from which a cell came.
-        """
-        try:
-            assert self.cropped == True
-        except Exception as error:
-            raise AssertionError(
-                "the method, crop(), must be called before the method gen_df()"
-            )
-        try:
-            assert isinstance(self.props_list, list)
-        except Exception as error:
-            raise AssertionError("props_list must be of type 'list'") from error
-        try:
-            assert len(self.cell_count) == self.frame_count
-        except Exception as error:
-            raise AssertionError(
-                "cell_count must contain the same number of frames as specified by frame_count"
-            ) from error
-
-        main_df = np.empty(shape=(0, len(self.props_list) + 3 + len(extra_props)))
-
-        for i in range(self.frame_count):
-            for j in range(self.cell_count[i]):
-                if self.cleaned_binary_roi[i][j].any() != 0:
-                    props = regionprops_table(
-                        self.cleaned_binary_roi[i][j].astype("uint8"),
-                        intensity_image=self.cleaned_scalar_roi[i][j],
-                        properties=self.props_list,
-                        extra_properties=extra_props,
-                    )
-
-                    df = np.array(list(props.values())).T
-                    if df.shape == (1, len(self.props_list) + 1 + len(extra_props)):
-                        tracker = [[i, j]]
-                        df = np.append(df, tracker, axis=1)
-                        main_df = np.append(main_df, df, axis=0)
-                    else:
-                        self.cell_count[i] -= 1
-                        pass
-
-                else:
-                    self.cell_count[i] -= 1
-                    pass
-
-        return main_df

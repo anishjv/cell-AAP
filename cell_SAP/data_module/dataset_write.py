@@ -2,7 +2,7 @@ import os
 import cv2
 from PIL import Image
 import numpy as np
-from data_utils import *
+from annotation_utils import *
 
 
 
