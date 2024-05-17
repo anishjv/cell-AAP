@@ -1,27 +1,12 @@
-# CCSN: Cell Classification and Segmentation Network
-CCSN is an in-progress neural network, desgined to take in cell microscopy images and output a an instance segmentation encoded with information about the cell's type.
+# cellular Segmentation Annotation Pipeline
+Utilities for the semi-auotomated generation of instance segmentation annotations to be used for neural network training. Utilities are built ontop of MAIR's [Segment Anything Model](https://github.com/facebookresearch/segment-anything/tree/main?tab=readme-ov-file), [UMAP](https://github.com/lmcinnes/umap) and [HDBSCAN](https://arxiv.org/abs/1911.02282). In addition to providing utilies for annotation building, we train a network, MAIR's [detectron2](https://github.com/facebookresearch/detectron2) to 
+1. Demonstrate the efficacy of our utilities. 
+2. Be used for microscopy annotation of supported cell lines 
 
-To use CCSN to create your own dataset in jupyter 
-1. Clone the repository into your notebook 
+Supported cell lines currently include:
+1. HeLa
 
-        !git clone https://github.com/anishjv/CCSN
-
-2. Import the data processing model into your notebook 
-
-        from CCSN import data_module as dt
-
-From there you're good to go! See the notebook example "dataset_creation.ipynb" for further details. 
-
-
-To use CCSN to segment HeLA cells using a pre-trained model in napari
-1. Clone the repository into your notebook 
-
-        !git clone https://github.com/anishjv/CCSN
-
-2. Run the file below (this file should come with the latest config file by default)
-
-        napari_nn_gui.py
-
+We've developed a napari application for the usage of this pre-trained network and propose a transfer learning schematic for the handling of new cell lines. 
 
 
 
