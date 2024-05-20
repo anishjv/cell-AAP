@@ -2,7 +2,6 @@ import napari
 import torch
 import sys
 sys.path.append("/Users/whoisv/cell-AAP/cell_AAP/")
-from torchvision.utils import draw_segmentation_masks
 import numpy as np
 import os
 import re
@@ -16,7 +15,9 @@ from data_module import annotation_utils as au   # type: ignore
 from skimage.measure import label
 from skimage.morphology import erosion, disk
 from magicclass import magicclass, field, MagicTemplate
-from magicclass.widgets import PushButton, CheckBox, FloatSlider, FileEdit
+from magicclass.widgets import PushButton, CheckBox, FloatSlider, FileEdit, ProgressBar
+from magicclass.utils import thread_worker
+
 
 setup_logger()
 TORCH_VERSION = ".".join(torch.__version__.split(".")[:2])
@@ -42,6 +43,7 @@ class CCSN_GUI(MagicTemplate):
         self.viewer = viewer
         self.predictor = predictor
 
+
     @magicclass(layout="vertical")
     class Field_2:
         image_selector = field(FileEdit, name="Select Image")
@@ -56,7 +58,14 @@ class CCSN_GUI(MagicTemplate):
         display_button = field(PushButton, name="Display")
         inference_button = field(PushButton, name="Inference")
 
+    @magicclass
+    class Field_3:
+        pbar = field(ProgressBar, name = 'Progress Bar')
+
+
     @Field_1.inference_button.connect
+    @Field_3.pbar.connect
+    @thread_worker(progress = {'pbar' :Field_3.pbar}, force_async=True)
     def _inference(self):
         """
         Runs inference on image returned by self._image_select(), saves inference result if self._save_select() == True
@@ -93,7 +102,8 @@ class CCSN_GUI(MagicTemplate):
 
 
         save_mask, filepath = self._save_select()
-        name = self._view_file()
+        name, _ = self._image_select()
+        name = name.replace(".", "/").split("/")[-2]
         if save_mask == True:
             if filepath == pathlib.Path("default/path"):
                 filepath = os.getcwd()
@@ -103,9 +113,14 @@ class CCSN_GUI(MagicTemplate):
                 compression="jpeg",
                 compressionargs={"level": 20},
             )
-            
+
+        return mask_array, name
+    
+
+    @_inference.returned.connect
+    def _view_inference(self, arr_name_tup):
+        mask_array, name = arr_name_tup
         self.viewer.add_labels(mask_array, name=f"{name}_inference")
-        return mask_array
 
     def _save_select(self):
         """
@@ -150,7 +165,7 @@ class CCSN_GUI(MagicTemplate):
             viewer.add_image(layer_data, name=name)
         else:
             raise ValueError("No image has been selected")
-        return name
+    
 
 
 if __name__ == "__main__":
