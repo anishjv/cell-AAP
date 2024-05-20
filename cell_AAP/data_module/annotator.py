@@ -19,6 +19,8 @@ class Annotator:
         self.phase_image_list = phase_image_list
         self.phase_image_stack = phase_image_stack
         self.props_list = props_list
+        self.point_prompts = True
+        self.box_prompts = False
         self.frame_count = None
         self.cell_count = None
         self.cleaned_binary_roi = None
@@ -30,17 +32,20 @@ class Annotator:
         self.cropped = False
         self.df_generated = False
         self.segmentations = None
+        self.to_segment = True
 
     def __str__(self):
         return "Instance of class, Processor, implemented to process microscopy images into regions of interest"
 
     @classmethod
-    def get(cls, props_list, dna_image_list, phase_image_list, frame_step=1):
+    def get(cls, props_list:list[str], dna_image_list:list[str], phase_image_list:list[str], frame_step:Optional[int]=1):
 
         try:
             assert len(dna_image_list) == len(phase_image_list)
         except Exception as error:
-            raise AssertionError("dna_image_list and phase_image_list must be of the same length (number of files)") from error
+            raise AssertionError(
+                "dna_image_list and phase_image_list must be of the same length (number of files)"
+            ) from error
 
         if len(dna_image_list) > 1:
             dna_image_tensor = tiff.imread(dna_image_list)
@@ -52,8 +57,8 @@ class Annotator:
                     dna_tup = dna_tup + dna_image_tensor[i][0::frame_step, :, :]
                     phase_tup = phase_tup + phase_image_tensor[i][0::frame_step, :, :]
 
-            dna_image_stack = np.concatenate(dna_tup, axis = 0)
-            phase_image_stack = np.concatenate(phase_tup, axis = 0)
+            dna_image_stack = np.concatenate(dna_tup, axis=0)
+            phase_image_stack = np.concatenate(phase_tup, axis=0)
 
         else:
             dna_image_stack = tiff.imread(dna_image_list[0])[0::frame_step, :, :]
@@ -92,23 +97,23 @@ class Annotator:
         self._dna_image_stack = dna_image_stack
 
     def crop(self, threshold_division, sigma, segment=True, predictor=None):
-        if segment == True and predictor != None:
-            (
-                self.roi,
-                self.discarded_box_counter,
-                region_props_stack,
-                self.segmentations,
-            ) = crop_regions_predict(
-                self.dna_image_stack, self.phase_image_stack, predictor, threshold_division, sigma
-            )
-
-        else:
-            (
-                self.roi,
-                self.discarded_box_counter,
-                region_props_stack,
-                self.coords,
-            ) = crop_regions(self.dna_image_list, self.dna_image_stack, threshold_division, sigma)
+        if predictor == None:
+            self.to_segment == False
+        (
+            self.roi,
+            self.discarded_box_counter,
+            region_props_stack,
+            self.segmentations,
+        ) = crop_regions_predict(
+            self.dna_image_stack,
+            self.phase_image_stack,
+            predictor,
+            threshold_division,
+            sigma,
+            self.point_prompts,
+            self.box_prompts,
+            self.to_segment,
+        )
 
         self.frame_count, self.cell_count = counter(
             region_props_stack, self.discarded_box_counter

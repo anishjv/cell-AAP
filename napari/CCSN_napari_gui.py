@@ -1,5 +1,7 @@
 import napari
 import torch
+import sys
+sys.path.append("/Users/whoisv/cell-AAP/cell_AAP/")
 from torchvision.utils import draw_segmentation_masks
 import numpy as np
 import os
@@ -7,11 +9,10 @@ import re
 import cv2
 import pathlib
 import tifffile as tiff
-from napari.types import LabelsData
 from detectron2.utils.logger import setup_logger
 from detectron2.engine import DefaultPredictor
 from detectron2.config import get_cfg
-from data_module import data_utils as dt
+from data_module import annotation_utils as au   # type: ignore
 from skimage.measure import label
 from skimage.morphology import erosion, disk
 from magicclass import magicclass, field, MagicTemplate
@@ -20,7 +21,7 @@ from magicclass.widgets import PushButton, CheckBox, FloatSlider, FileEdit
 setup_logger()
 TORCH_VERSION = ".".join(torch.__version__.split(".")[:2])
 CUDA_VERSION = torch.__version__.split("+")[-1]
-model = "20240513_171100_0.33x"
+model = "/Users/whoisv/cell-AAP/models/20240513_171100_0.33x"
 model_version = "final"
 cfg = get_cfg()
 cfg.merge_from_file(model + "/config.yaml")
@@ -75,17 +76,19 @@ class CCSN_GUI(MagicTemplate):
             )
 
             for frame in range(im_array.shape[0]):
-                img = dt.bw_to_rgb(im_array[frame].astype("float32"))
+                img = au.bw_to_rgb(im_array[frame].astype("float32"))
                 output = self.predictor(img)
                 segmentations = np.asarray(output["instances"].pred_masks.to("cpu"))
                 segmentations = np.bitwise_or.reduce(segmentations, axis = 0)
+                segmentations = label(segmentations)
                 mask_array[frame] = segmentations
 
         elif len(im_array.shape) == 2:
-            img = dt.bw_to_rgb(im_array.astype("float32"))
+            img = au.bw_to_rgb(im_array.astype("float32"))
             output = self.predictor(img)
             segmentations = np.asarray(output["instances"].pred_masks.to("cpu"))
-            segmentations = np.bitwise_or.reduce(segmentations, axis = 0) 
+            segmentations = np.bitwise_or.reduce(segmentations, axis = 0)
+            segmentations = label(segmentations)
             mask_array = segmentations
 
 

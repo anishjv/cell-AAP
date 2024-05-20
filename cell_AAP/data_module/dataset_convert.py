@@ -7,14 +7,14 @@ from PIL import Image
 import numpy as np
 from pycococreator.pycococreatortools import pycococreatortools
 
-ROOT_DIR = 'ds_1.7_.33x/train'
+ROOT_DIR = '/Users/whoisv/cell-AAP/datasets/coco_conv_dataset_1.8/val'
 IMAGE_DIR = os.path.join(ROOT_DIR, 'images')
 ANNOTATION_DIR = os.path.join(ROOT_DIR, 'annotations')
 
 INFO = {
     "description": "cell_segmentation_training_dataset",
     "url": "",
-    "version": "1.7-0.2x",
+    "version": "1.8",
     "year": 2024,
     "contributor": "anishjv",
     "date_created": datetime.datetime.utcnow().isoformat(' ')
@@ -111,7 +111,7 @@ def main():
                 print(i)
             image_id = image_id + 1
 
-    with open('{}/instances_cellseg_1.7_.33x_train.json'.format(ROOT_DIR), 'w') as output_json_file:
+    with open('{}/instances_cellseg_1.8_val.json'.format(ROOT_DIR), 'w') as output_json_file:
         json.dump(coco_output, output_json_file)
 
 
