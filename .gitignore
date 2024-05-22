@@ -2,9 +2,13 @@
 *.pth
 .DS_Store
 __pycache__
-.ipynb_checkpoints
+.ipynb_checkpoints/
+cell_AAP/.ipynb_checkpoints/
+cell_AAP/data_module/.ipynb_checkpoints
 datasets/
 models/
 pycococreator/
 notebooks/contours.ipynb
-
+notebooks/vit_l.pt
+cell_AAP/napari/magicclass_main.py
+cell_AAP.egg-info/

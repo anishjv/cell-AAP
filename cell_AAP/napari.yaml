@@ -1,0 +1,14 @@
+name: cell-AAP
+display_name: cell-AAP
+schema_version: 0.1.0
+
+contributions:
+  commands:
+  - id: cell-AAP.run
+    title: Create GUI
+    python_name: cell_AAP.napari.main:create_cellAAP_widget
+
+  
+  widgets:
+  - command: cell-AAP.run
+    display_name: cell-AAP

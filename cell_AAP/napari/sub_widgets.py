@@ -1,0 +1,91 @@
+from __future__ import annotations
+from qtpy import QtWidgets
+
+
+def create_file_selector_widgets() -> dict[str, QtWidgets.QWidget]:
+
+    image_selector = QtWidgets.QPushButton('Select Image')
+    image_selector.setToolTip(
+        'Select an image to ultimately run inference on'
+    )
+
+    widgets = {'image_selector': image_selector}
+
+    path_selector = QtWidgets.QPushButton('Select Directory')
+    path_selector.setToolTip(
+        "Select a directory to ultimately store the inference results at"
+    )
+
+    widgets['path_selector'] = path_selector
+
+    save_selector = QtWidgets.QCheckBox('Save Inference')
+    save_selector.setToolTip(
+        'Choose whether to save the inference result or not'
+    )
+
+    widgets['save_selector'] = save_selector
+
+    return widgets
+
+
+def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
+
+    thresholder = QtWidgets.QDoubleSpinBox()
+    thresholder.setRange(0, 100)
+    thresholder.setValue(0.5)
+    thresholder.setStepType(QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType)
+    thresholder.setToolTip(
+        'Set Confidence Hyperparameter'
+    )
+    thresholder.setWrapping(True)
+    widgets = {'thresholder': ('Confidence Threshold', thresholder)}
+
+    confluency_est = QtWidgets.QSpinBox()
+    confluency_est.setRange(100, 2000)
+    confluency_est.setValue(500)
+    confluency_est.setStepType(QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType)
+    confluency_est.setToolTip(
+        'Estimate the number of cells in a frame'
+    )
+
+    widgets['confluency_est'] = ('Number of Cells (Approx.)', confluency_est)
+
+    set_configs = QtWidgets.QPushButton('Push')
+    set_configs.setToolTip(
+        'Set Configurations'
+    )
+
+    widgets['set_configs'] = ('Set Configurations', set_configs)
+
+
+    return widgets 
+
+
+def create_disp_inf_widgets() -> dict[str,  QtWidgets.QWidget]:
+
+    inference_button = QtWidgets.QPushButton()
+    inference_button.setText('Inference')
+    inference_button.setToolTip(
+        'Run Inference'
+    )
+
+    widgets = {'inference_button' :  inference_button}
+
+    display_button = QtWidgets.QPushButton('Display')
+    display_button.setToolTip(
+        'Display selected image'
+    )
+
+    widgets['display_button'] = display_button
+
+    pbar = QtWidgets.QProgressBar()
+    widgets['progress_bar'] = pbar
+
+    return widgets
+
+
+
+    
+
+
+
