@@ -7,6 +7,7 @@ import cell_AAP.napari.sub_widgets as sub_widgets # type: ignore
 
 
 class cellAAPWidget(QtWidgets.QScrollArea):
+    "cellAAPWidget GUI Class"
 
     def __getitem__(self, key: str) -> QtWidgets.QWidget:
         return self._widgets[key]
@@ -35,7 +36,7 @@ class cellAAPWidget(QtWidgets.QScrollArea):
 
         # Create widgets and add to layout
         self._widgets = {}
-        self._add_widgets()
+        self._add_disp_inf_widgets()
         self._add_file_widgets()
         self._add_config_widgets()
         self._main_layout.addWidget(self._tabs, stretch=0)
@@ -47,7 +48,9 @@ class cellAAPWidget(QtWidgets.QScrollArea):
             )
 
 
-    def _add_widgets(self):
+    def _add_disp_inf_widgets(self):
+        "Adds disp_inf_widgets which are the output of sub_widgets.create_disp_ing_widgets. The aforementioned function outputs -> dict[str: QtWidgets.QWidget]"
+
         disp_inf_widgets = sub_widgets.create_disp_inf_widgets()
         self._widgets.update(disp_inf_widgets)
         widget_holder = QtWidgets.QGroupBox('cell-AAP')
@@ -61,6 +64,8 @@ class cellAAPWidget(QtWidgets.QScrollArea):
 
 
     def _add_file_widgets(self):
+        "Adds file_widgets which are the output of sub_widgets.create_file_selector_widgets. The aforementioned function outputs -> dict[str: QtWidgets.QWidget]"
+
         file_widgets = sub_widgets.create_file_selector_widgets()
         self._widgets.update(file_widgets)
 
@@ -74,6 +79,8 @@ class cellAAPWidget(QtWidgets.QScrollArea):
 
 
     def _add_config_widgets(self):
+        "Adds config_widgets which are the output of sub_widgets.create_config_widgets. The aforementioned function outputs -> dict[str: tuple[str, QtWidgets.QWidget]]"
+
         config_widgets = sub_widgets.create_config_widgets()
         self._widgets.update(
         {key: value[1] for key, value in config_widgets.items()}

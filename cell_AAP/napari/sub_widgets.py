@@ -3,6 +3,15 @@ from qtpy import QtWidgets
 
 
 def create_file_selector_widgets() -> dict[str, QtWidgets.QWidget]:
+    '''
+    Creates File Selector Widgets 
+    ------------------------------
+    RETURNS:
+        widgets: dict
+            - image_selector: QtWidgets.QPushButton
+            - path_selector: QtWidgets.QPushButtons (These push buttons connect to a function that creates an instance of QtWidgets.QFileDialog)
+            - save_selector: QtWidgets.QCheckBox
+    '''
 
     image_selector = QtWidgets.QPushButton('Select Image')
     image_selector.setToolTip(
@@ -29,6 +38,15 @@ def create_file_selector_widgets() -> dict[str, QtWidgets.QWidget]:
 
 
 def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
+    '''
+    Creates Configuration Widgets 
+    ------------------------------
+    RETURNS:
+        widgets: dict
+            - thresholder: QtWidgets.QDoubleSpinBox
+            - confluency_est: QtWidgets.QSpinBox
+            - set_configs: QtWidgets.QPushButton
+    '''
 
     thresholder = QtWidgets.QDoubleSpinBox()
     thresholder.setRange(0, 100)
@@ -62,6 +80,15 @@ def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
 
 
 def create_disp_inf_widgets() -> dict[str,  QtWidgets.QWidget]:
+    '''
+    Creates Display and Inference Widgets 
+    ------------------------------
+    RETURNS:
+        widgets: dict
+            - inference_button: QtWidgets.QPushButton
+            - display_button: QtWidgets.QPushButton
+            - pbar: QtWidgets.QProgressBar
+    '''
 
     inference_button = QtWidgets.QPushButton()
     inference_button.setText('Inference')

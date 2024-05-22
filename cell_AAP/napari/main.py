@@ -52,6 +52,7 @@ if not logger.handlers:
 
 
 def create_cellAAP_widget() -> ui.cellAAPWidget:
+    "Creates instance of ui.cellAAPWidget and sets callbacks"
 
     cellaap_widget = ui.cellAAPWidget(
         napari_viewer = napari.current_viewer(),
@@ -87,10 +88,12 @@ def create_cellAAP_widget() -> ui.cellAAPWidget:
 
 
 
-def run_inference(cellaap_widget):
+def run_inference(cellaap_widget : ui.cellAAPWidget):
     """
-    Runs inference on image returned by self._image_select(), saves inference result if self._save_select() == True
+    Runs inference on image returned by self._image_select(), saves inference result if save selector has been checked
     ----------------------------------------------------------------------------------------------------------------
+    Inputs:
+        cellapp_widget: instance of ui.cellAAPWidget()
     """
     prog_count = 0
     mask_array = []
@@ -145,7 +148,14 @@ def run_inference(cellaap_widget):
     cellaap_widget.viewer.add_labels(np.array(mask_array), name = name, opacity = 0.3)
 
 
-def inference(cellaap_widget, img):
+def inference(cellaap_widget : ui.cellAAPWidget, img):
+    '''
+    Runs the actual inference -> Detectron2 -> masks
+    ------------------------------------------------
+    INPUTS:
+        cellaap_widget: instance of ui.cellAAPWidget()
+    '''
+
     output = cellaap_widget.predictor(img)
     segmentations = np.asarray(output["instances"].pred_masks.to("cpu"))
     num_masks = segmentations.shape[0]
@@ -156,7 +166,13 @@ def inference(cellaap_widget, img):
     return segmentations
 
 
-def configure(cellaap_widget):
+def configure(cellaap_widget : ui.cellAAPWidget):
+    '''
+    Configures some tunable parameters for Detectron2
+    ------------------------------------------------
+    INPUTS:
+        cellaap_widget: instance of ui.cellAAPWidget()
+    '''
     if cellaap_widget.confluency_est.value():
         cellaap_widget.cfg.TEST.DETECTIONS_PER_IMAGE = cellaap_widget.confluency_est.value()
     if cellaap_widget.thresholder.value():
@@ -166,7 +182,7 @@ def configure(cellaap_widget):
     )
 
 
-def image_select(cellaap_widget):
+def image_select(cellaap_widget: ui.cellAAPWidget):
     """
     Returns the path selected in the image selector box and the array corresponding the to path
     -------------------------------------------------------------------------------------------
@@ -189,10 +205,12 @@ def image_select(cellaap_widget):
 
     return str(cellaap_widget.file_grabber), layer_data
 
-def display(cellaap_widget):
+def display(cellaap_widget: ui.cellAAPWidget):
     """
     Displays file in Napari gui if file has been selected, also returns the 'name' of the image file
     ------------------------------------------------------------------------------------------------
+    INPUTS:
+        cellaap_widget: instance of ui.cellAAPWidget()
     """
     try:
         name, layer_data = image_select(cellaap_widget)
@@ -208,6 +226,12 @@ def display(cellaap_widget):
     
 
 def grab_file(cellaap_widget):
+    '''
+    Initiates a QtWidget.QFileDialog instance and grabs a file
+    -----------------------------------------------------------
+    INPUTS:
+        cellaap_widget: instance of ui.cellAAPWidget()
+    '''
 
     file_filter = 'TIFF (*.tiff, *.tif);; Other (*.jpg, *.png)'
     file_grabber = QtWidgets.QFileDialog.getOpenFileName(
@@ -224,6 +248,12 @@ def grab_file(cellaap_widget):
 
 
 def grab_directory(cellaap_widget):
+    '''
+    Initiates a QtWidget.QFileDialog instance and grabs a directory
+    -----------------------------------------------------------
+    INPUTS:
+        cellaap_widget: instance of ui.cellAAPWidget()I
+    '''
 
     dir_grabber = QtWidgets.QFileDialog.getExistingDirectory(
         parent = cellaap_widget,
