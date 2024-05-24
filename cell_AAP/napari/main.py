@@ -11,6 +11,7 @@ import tifffile as tiff
 import re
 import os
 import torch
+import skimage.measure
 
 from detectron2.utils.logger import setup_logger
 from detectron2.engine import DefaultPredictor
@@ -97,6 +98,8 @@ def run_inference(cellaap_widget : ui.cellAAPWidget):
     """
     prog_count = 0
     mask_array = []
+    points = ()
+    print('Inference')
     try:
         name, im_array = image_select(cellaap_widget)
     except AttributeError:
@@ -112,16 +115,17 @@ def run_inference(cellaap_widget : ui.cellAAPWidget):
             cellaap_widget.progress_bar.setMaximum(im_array.shape[0])
             cellaap_widget.progress_bar.setValue(prog_count)
             img = au.bw_to_rgb(im_array[frame].astype("float32"))
-            segmentations = inference(cellaap_widget, img)
+            segmentations, mitotic_centroids = inference(cellaap_widget, img, frame)
             mask_array.append(segmentations.astype('uint8'))
-
+            points += (mitotic_centroids, )
 
     elif len(im_array.shape) == 2:
         prog_count += 1
         cellaap_widget.progress_bar.setValue(prog_count)
         img = au.bw_to_rgb(im_array.astype("float32"))
-        segmentations = inference(cellaap_widget, img)
+        segmentations, mitotic_centroids = inference(cellaap_widget, img)
         mask_array.append(segmentations.astype('uint8'))
+        points += (mitotic_centroids, )
 
     name = name.replace(".", "/").split("/")[-2]
 
@@ -137,34 +141,64 @@ def run_inference(cellaap_widget : ui.cellAAPWidget):
 
         tiff.imwrite(
             os.path.join(filepath, f"{model}_{model_version}_{name}_.tif"),
-            np.array(mask_array).astype("uint8"),
-            compression="jpeg",
-            compressionargs={"level": 20},
+            np.array(mask_array).astype("uint16"),
         )
 
-    #label_mapping = metadata_generator(output)
         
+    points_array = np.vstack(points)
     cellaap_widget.progress_bar.reset()
-    cellaap_widget.viewer.add_labels(np.array(mask_array), name = name, opacity = 0.3)
+    cellaap_widget.viewer.add_labels(np.array(mask_array), name = name + 'inf', opacity = 0.3)
+    cellaap_widget.viewer.add_points(points_array, ndim = points_array.shape[1], name = name + 'mitotic_centroids', size = 15)
 
 
-def inference(cellaap_widget : ui.cellAAPWidget, img):
+def inference(cellaap_widget : ui.cellAAPWidget, img : np.ndarray, frame_num: int = None) -> tuple[np.ndarray, list[np.ndarray[tuple]]]: 
     '''
     Runs the actual inference -> Detectron2 -> masks
     ------------------------------------------------
     INPUTS:
         cellaap_widget: instance of ui.cellAAPWidget()
     '''
+    if img.shape[0] != 2048:
+        half_diff = (2048 - img.shape) / 2
+        img = cv2.copyMakeBorder(
+                img, 
+                half_diff, 
+                half_diff, 
+                half_diff, 
+                half_diff, 
+                cv2.BORDER_CONSTANT, 
+                value = img.mean()
+                )
 
     output = cellaap_widget.predictor(img)
-    segmentations = np.asarray(output["instances"].pred_masks.to("cpu"))
-    num_masks = segmentations.shape[0]
-    labels = np.linspace(1, num_masks, num_masks)
-    segmentations = [l * m for l, m in zip(labels, segmentations)]
-    segmentations = np.sum(segmentations, axis = 0)
-    
-    return segmentations
+    segmentations = output["instances"].pred_masks.to("cpu")
+    labels = output['instances'].pred_classes.to('cpu')
 
+    seg_labeled = np.zeros_like(segmentations[0], int)
+    for i, mask in enumerate(segmentations):
+        if labels[i] == 0:
+            seg_labeled[mask] = 1
+        else:
+            seg_labeled[mask] = 100
+
+    mitotic_centroids = []
+    for i, class_label in enumerate(labels):
+        if class_label == 1:
+            labeled_mask = skimage.measure.label(segmentations[i])
+            centroid = skimage.measure.centroid(labeled_mask)
+            if frame_num != None:
+                centroid = np.array([frame_num, centroid[0], centroid[1]])
+
+            mitotic_centroids.append(centroid)
+            
+        else:
+            pass
+
+    # Quicker but does not work well if model predicts overlapping masks
+    #segmentations = np.logical_xor.reduce(segmentations, axis = 0)
+    #seg_labeled = label(segmentations)
+
+    return seg_labeled ,mitotic_centroids
 
 def configure(cellaap_widget : ui.cellAAPWidget):
     '''
