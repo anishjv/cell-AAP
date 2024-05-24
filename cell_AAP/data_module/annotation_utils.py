@@ -117,9 +117,8 @@ def get_box_size(region_props, scaling_factor: float):
         major_axis.append(region_props[i].axis_major_length)
 
     dna_major_axis = np.median(np.array(major_axis))
-    phase_major_axis = scaling_factor * dna_major_axis
-    bb_side_length = np.sqrt(phase_major_axis)
-
+    bb_side_length = scaling_factor * dna_major_axis
+   
     return bb_side_length // 2
 
 
@@ -129,7 +128,6 @@ def iou_with_list(input_box: list, boxes_list: list[list]):
 
         intersection_width = min(input_box[2], box[2]) - max(input_box[0], box[0])
         intersection_height = min(input_box[1], box[1]) - max(input_box[3], box[3])
-        print(intersection_width, intersection_height)
 
         if intersection_width == 0 and intersection_height == 0:
             ious.append(1)
@@ -173,6 +171,7 @@ def predict(
             boxes=transformed_boxes,
             multimask_output=False,
         )
+        masks = masks.detach().cpu().numpy()
 
     elif point_prompts == True:
 
@@ -185,13 +184,16 @@ def predict(
         masks, _, _ = predictor.predict(
             point_coords=np.array([points]),
             point_labels=np.array([1]),
-            boxes=transformed_boxes,
+            box = None,
             multimask_output=False,
         )
 
-    masks = masks.detach().cpu().numpy()
-    for h in range(masks.shape[0]):
-        packed_mask = np.packbits(masks[h, 0, :, :], axis=0)
+    if len(masks.shape) == 4:
+        for h in range(masks.shape[0]):
+            packed_mask = np.packbits(masks[h, 0, :, :], axis=0)
+            segmentations.append(packed_mask)
+    else:
+        packed_mask = np.packbits(masks[0, :, :], axis=0)
         segmentations.append(packed_mask)
 
     return segmentations
@@ -281,21 +283,18 @@ def crop_regions_predict(
                         predictor.set_image(phase_image_rgb)
                         sam_previous_image = sam_current_image
 
-                    else:
-                        pass
-
                     if box_prompts == True:
                         if len(boxes) == batch_size or (j + 1) == len(
                             dna_image_region_props[f"Frame_{i}"]
                         ):
                             segmentations_temp = predict(
-                                predictor, phase_image_rgb, boxes, box_prompts=True
+                                predictor, phase_image_rgb, boxes = boxes, box_prompts=True
                             )
                             boxes = []
                     elif point_prompts == True:
                         points = [x, y]
                         segmentations_temp = predict(
-                            predictor, phase_image_rgb, points, point_prompts=True
+                            predictor, phase_image_rgb, points = points, point_prompts=True
                         )
                 else:
                     pass
