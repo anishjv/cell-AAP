@@ -31,7 +31,7 @@ If a conda distribution has been installed:
 
 3. Then install cell-AAP from PyPi
 
-        pip install cell-AAP==0.0.1
+        pip install cell-AAP==0.0.3
 
 4. Finally detectron2 must be built from source, atop cell-AAP
     
@@ -56,6 +56,7 @@ If running inference on large volumes of data, i.e. timeseries data >= 300 MB in
 
 1. Assemble a small, < 100 MB, substack of your data using python or a program like [ImageJ](https://imagej.net/ij/download.html)
 2. Use this substack to find the optimal parameters for your data, (Number of Cells, Confidence)
+3. Run Inference over the volume using the discovered optimal parameters
 
 Note: Finding the optimal set of parameters requires some trial and error, to assist we've created a table. 
 

@@ -2,33 +2,26 @@ from __future__ import annotations
 import logging
 
 import napari
-import cell_AAP.napari.ui as ui # type: ignore
+import cell_AAP.napari.ui as ui # type:ignore
+import cell_AAP.data_module.annotation_utils as au #type:ignore
 
 import numpy as np 
-import sys
 import cv2
 import tifffile as tiff
 import re
 import os
 import torch
 import skimage.measure
+import pooch
 
 from detectron2.utils.logger import setup_logger
 from detectron2.engine import DefaultPredictor
 from detectron2.config import get_cfg
-from detectron2.data import MetadataCatalog
 from qtpy import QtWidgets
-
-sys.path.append("/Users/whoisv/cell-AAP/cell_AAP/")
-from data_module import annotation_utils as au # type: ignore
 
 setup_logger()
 TORCH_VERSION = ".".join(torch.__version__.split(".")[:2])
 CUDA_VERSION = torch.__version__.split("+")[-1]
-model = "/Users/whoisv/cell-AAP/models/20240520_140429_1.8"
-model_version = "final"
-cellseg_metadata = MetadataCatalog.get("cellseg_train_1.8")
-
 
 __all__ = [
     "create_cellAAP_widget",
@@ -60,10 +53,6 @@ def create_cellAAP_widget() -> ui.cellAAPWidget:
         cfg = get_cfg()
     )
     
-    cellaap_widget.cfg.merge_from_file(model + "/config.yaml")
-    cellaap_widget.cfg.MODEL.WEIGHTS = os.path.join(model, f"model_{model_version}.pth")
-    cellaap_widget.cfg.MODEL.DEVICE = "cpu"
-
 
     cellaap_widget.inference_button.clicked.connect(
         lambda: run_inference(cellaap_widget)                               
@@ -99,7 +88,6 @@ def run_inference(cellaap_widget : ui.cellAAPWidget):
     prog_count = 0
     mask_array = []
     points = ()
-    print('Inference')
     try:
         name, im_array = image_select(cellaap_widget)
     except AttributeError:
@@ -107,6 +95,14 @@ def run_inference(cellaap_widget : ui.cellAAPWidget):
             'No Image has been selected'
         )
         return 
+    
+    try:
+        assert cellaap_widget.configured == True
+    except AssertionError:
+        napari.utils.notifications.show_error(
+            'You must configure the model before running inference'
+        )
+        return
     
     cellaap_widget.predictor = DefaultPredictor(cellaap_widget.cfg)
     if len(im_array.shape) == 3:
@@ -117,7 +113,8 @@ def run_inference(cellaap_widget : ui.cellAAPWidget):
             img = au.bw_to_rgb(im_array[frame].astype("float32"))
             segmentations, mitotic_centroids = inference(cellaap_widget, img, frame)
             mask_array.append(segmentations.astype('uint8'))
-            points += (mitotic_centroids, )
+            if len(mitotic_centroids) != 0:
+             points += (mitotic_centroids, )
 
     elif len(im_array.shape) == 2:
         prog_count += 1
@@ -125,7 +122,8 @@ def run_inference(cellaap_widget : ui.cellAAPWidget):
         img = au.bw_to_rgb(im_array.astype("float32"))
         segmentations, mitotic_centroids = inference(cellaap_widget, img)
         mask_array.append(segmentations.astype('uint8'))
-        points += (mitotic_centroids, )
+        if len(mitotic_centroids) != 0:
+            points += (mitotic_centroids, )
 
     name = name.replace(".", "/").split("/")[-2]
 
@@ -140,15 +138,15 @@ def run_inference(cellaap_widget : ui.cellAAPWidget):
             pass
 
         tiff.imwrite(
-            os.path.join(filepath, f"{model}_{model_version}_{name}_.tif"),
+            os.path.join(filepath, f"{name}_inf.tif"),
             np.array(mask_array).astype("uint16"),
         )
 
-        
-    points_array = np.vstack(points)
     cellaap_widget.progress_bar.reset()
     cellaap_widget.viewer.add_labels(np.array(mask_array), name = name + 'inf', opacity = 0.3)
-    cellaap_widget.viewer.add_points(points_array, ndim = points_array.shape[1], name = name + 'mitotic_centroids', size = 15)
+    if points != ():
+        points_array = np.vstack(points)
+        cellaap_widget.viewer.add_points(points_array, ndim = points_array.shape[1], name = name + 'mitotic_centroids', size = 15)
 
 
 def inference(cellaap_widget : ui.cellAAPWidget, img : np.ndarray, frame_num: int = None) -> tuple[np.ndarray, list[np.ndarray[tuple]]]: 
@@ -207,13 +205,21 @@ def configure(cellaap_widget : ui.cellAAPWidget):
     INPUTS:
         cellaap_widget: instance of ui.cellAAPWidget()
     '''
+
+    model = get_model(cellaap_widget)
+    cellaap_widget.cfg.merge_from_file(model.fetch('config.yaml'))
+    cellaap_widget.cfg.MODEL.WEIGHTS = model.fetch('model_final.pth')
+    cellaap_widget.cfg.MODEL.DEVICE = "cpu"
+
     if cellaap_widget.confluency_est.value():
         cellaap_widget.cfg.TEST.DETECTIONS_PER_IMAGE = cellaap_widget.confluency_est.value()
     if cellaap_widget.thresholder.value():
         cellaap_widget.cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = cellaap_widget.thresholder.value()
+
     napari.utils.notifications.show_info(
         f"Configurations successfully saved"
     )
+    cellaap_widget.configured = True
 
 
 def image_select(cellaap_widget: ui.cellAAPWidget):
@@ -298,3 +304,38 @@ def grab_directory(cellaap_widget):
     napari.utils.notifications.show_info(
         f"Directory: {dir_grabber} has been selected"
     )
+
+
+def get_model(cellaap_widget):
+    '''
+    Instaniates POOCH instance containing model files from the model_registry
+    --------------------------------------------------------------------------
+    INPUTS:
+        cellaap_widget: instance of ui.cellAAPWidget()I
+    '''
+
+    model_name = cellaap_widget._widgets['model_selector'].currentText()
+
+    url_registry = {
+        "HeLa" : "doi:10.5281/zenodo.11387359/"
+    }
+
+    weights_registry = {
+        "HeLa" : ("model_final.pth", "md5:bcb7f3056548ddf25130f7b6de85595d")
+    }
+
+    configs_registry = {
+        "HeLa" : ("config.yaml", "md5:cf1532e9bc0ed07285554b1e28f942de")
+    }
+
+
+    model = pooch.create(
+    path = pooch.os_cache('cell_aap'),
+    base_url = url_registry[f"{model_name}"],
+    registry = {
+        weights_registry[f"{model_name}"][0]:weights_registry[f"{model_name}"][1],
+        configs_registry[f"{model_name}"][0]:configs_registry[f"{model_name}"][1]
+    }
+)
+    return model
+

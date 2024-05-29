@@ -2,7 +2,7 @@ import os
 import cv2
 from PIL import Image
 import numpy as np
-from annotation_utils import *
+from cell_AAP.data_module import annotation_utils
 
 
 
@@ -76,7 +76,7 @@ def write_coco_conv_dataset(parent_dir : str, phase_image_stack, segmentations, 
         else:
             os.chdir(os.path.join(test_path, 'images'))
 
-        image = Image.fromarray( bw_to_rgb(phase_image_stack[k]) )
+        image = Image.fromarray( annotation_utils.bw_to_rgb(phase_image_stack[k]) )
         image.save(f'{k}.jpg')
         
     

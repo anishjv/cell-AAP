@@ -46,7 +46,12 @@ def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
             - thresholder: QtWidgets.QDoubleSpinBox
             - confluency_est: QtWidgets.QSpinBox
             - set_configs: QtWidgets.QPushButton
+            - model_selector: QtWigets.QComboxBox
     '''
+
+    model_selector = QtWidgets.QComboBox()
+    model_selector.addItem('HeLa')
+    widgets = {'model_selector': ('Select Model', model_selector)}
 
     thresholder = QtWidgets.QDoubleSpinBox()
     thresholder.setRange(0, 100)
@@ -56,7 +61,7 @@ def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
         'Set Confidence Hyperparameter'
     )
     thresholder.setWrapping(True)
-    widgets = {'thresholder': ('Confidence Threshold', thresholder)}
+    widgets['thresholder'] = ('Confidence Threshold', thresholder)
 
     confluency_est = QtWidgets.QSpinBox()
     confluency_est.setRange(100, 2000)

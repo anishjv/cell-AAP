@@ -2,7 +2,8 @@ import re
 import numpy as np
 import tifffile as tiff
 from skimage.measure import regionprops_table
-from annotation_utils import *
+from cell_AAP.data_module import annotation_utils #type:ignore
+from typing import Optional
 
 
 class Annotator:
@@ -104,7 +105,7 @@ class Annotator:
             self.discarded_box_counter,
             region_props_stack,
             self.segmentations,
-        ) = crop_regions_predict(
+        ) = annotation_utils.crop_regions_predict(
             self.dna_image_stack,
             self.phase_image_stack,
             predictor,
@@ -115,10 +116,10 @@ class Annotator:
             self.to_segment,
         )
 
-        self.frame_count, self.cell_count = counter(
+        self.frame_count, self.cell_count = annotation_utils.counter(
             region_props_stack, self.discarded_box_counter
         )
-        self.cleaned_binary_roi, self.cleaned_scalar_roi, self.masks = clean_regions(
+        self.cleaned_binary_roi, self.cleaned_scalar_roi, self.masks = annotation_utils.clean_regions(
             self.roi, self.frame_count, self.cell_count, threshold_division, sigma
         )
         self.cropped = True

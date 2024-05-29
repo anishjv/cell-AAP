@@ -1,7 +1,7 @@
 from __future__ import annotations
 from napari.viewer import Viewer
 from qtpy import QtWidgets
-import cell_AAP.napari.sub_widgets as sub_widgets # type: ignore
+from cell_AAP.napari import sub_widgets # type: ignore
 
 
 
@@ -20,13 +20,11 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         """
         super().__init__()
 
-        # We will need to viewer for various callbacks
         self.viewer = napari_viewer
         self.cfg = cfg
+        self.configured = False
 
-        # Let the scroll area automatically resize the widget
         self.setWidgetResizable(True)  # noqa: FBT003
-
 
         self._main_layout = QtWidgets.QVBoxLayout()
         self._main_widget = QtWidgets.QWidget()
