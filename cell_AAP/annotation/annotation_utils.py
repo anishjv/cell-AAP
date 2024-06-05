@@ -2,17 +2,19 @@ import cv2
 import numpy as np
 import torch
 from PIL import Image
+import skimage 
 from skimage.measure import regionprops, label
 from skimage.morphology import white_tophat, square, disk, erosion
 from skimage.segmentation import clear_border
 from skimage.filters import (
     gaussian,
-    threshold_isodata,
+    threshold_otsu,
 )  # pylint: disable=no-name-in-module
 from typing import Optional
+import scipy
 
 
-def preprocess_2d(image, threshold_division : float, sigma : float, strel_cell=square(71)):
+def preprocess_2d(image: np.ndarray, threshold_division : float, sigma : float, strel_cell=square(71)) -> tuple[np.ndarray, np.ndarray]:
     """
     Preprocesses a specified image
     ------------------------------
@@ -30,7 +32,7 @@ def preprocess_2d(image, threshold_division : float, sigma : float, strel_cell=s
     im = white_tophat(
         im, strel_cell
     )  # Background subtraction + uneven illumination correction
-    thresh_im = threshold_isodata(im)
+    thresh_im = threshold_otsu(im)
     redseg = im > (
         thresh_im / threshold_division
     )  # only keep pixels above the threshold
@@ -40,12 +42,12 @@ def preprocess_2d(image, threshold_division : float, sigma : float, strel_cell=s
     return labels, redseg
 
 
-def preprocess_3d(targetstack, threshold_division : float, sigma : float, strel_cell=square(71)):
+def preprocess_3d(targetstack: np.ndarray, threshold_division : float, sigma : float, struct_size: float, strel_cell=square(71)) -> tuple[np.ndarray, skimage.measure.regionprops]:
     """
     Preprocesses a stack of images
     ------------------------------
     INPUTS:
-        targetstach: n-darray, stack of (n x n) images
+        targetstach: n-darray, stack of (n x n) images, i.e. a (z, n, n) dimensional array
         strel_cell: n-darray, structuring element for white_tophat
         threshold_division: float or int
         sigma: float or int
@@ -61,20 +63,20 @@ def preprocess_3d(targetstack, threshold_division : float, sigma : float, strel_
         im = white_tophat(
             im, strel_cell
         )  # Background subtraction + uneven illumination correction
-        thresh_im = threshold_isodata(im)
-        im = erosion(im, disk(8))
+        thresh_im = threshold_otsu(im)
+        im = erosion(im, disk(struct_size))
         redseg = im > (
             thresh_im / (threshold_division + 0.25)
         )  # only keep pixels above the threshold
         lblred = label(redseg)
 
         labels = label(lblred)
-        region_props[f"Frame_{i}"] = regionprops(labels)
+        region_props[f"Frame_{i}"] = regionprops(labels, intensity_image = labels * im)
 
-    return region_props
+    return labels, region_props
 
 
-def bw_to_rgb(image, max_pixel_value:Optional[int]=255, min_pixel_value:Optional[int]=0):
+def bw_to_rgb(image: np.ndarray, max_pixel_value:Optional[int]=255, min_pixel_value:Optional[int]=0) -> np.ndarray:
     """
     Converts a tiffile of shape (x, y) to a file of shape (3, x, y) where each (x, y) frame of the first dimension corresponds to a color
     --------------------------------------------------------------------------------------------------------------------------------------
@@ -100,7 +102,7 @@ def bw_to_rgb(image, max_pixel_value:Optional[int]=255, min_pixel_value:Optional
     return rgb_image
 
 
-def get_box_size(region_props, scaling_factor: float):
+def get_box_size(region_props : skimage.measure.regionprops, scaling_factor: float) -> float:
     """
     Given a skimage region props object from a flouresence microscopy image, computes the bounding box size to be used in crop_regions or crop_regions_predict
     -----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -112,17 +114,61 @@ def get_box_size(region_props, scaling_factor: float):
     OUTPUTS:
             half the side length of a bounding box
     """
-    major_axis = []
-    for i in range(len(region_props)):
-        major_axis.append(region_props[i].axis_major_length)
+
+    major_axis = [region_props[i].axis_major_length for i, _ in enumerate(region_props)]
 
     dna_major_axis = np.median(np.array(major_axis))
     bb_side_length = scaling_factor * dna_major_axis
-   
+    
+    print(bb_side_length)
     return bb_side_length // 2
 
 
-def iou_with_list(input_box: list, boxes_list: list[list]):
+
+def get_box_size_scaled(region_props, max_size: float) -> list[float]:
+    """
+    Given a skimage region props object from a flouresence microscopy image, computes the bounding box size to be used in crop_regions or crop_regions_predict
+    -----------------------------------------------------------------------------------------------------------------------------------------------------------
+    INPUTS:
+            region_props: skimage object, each index represents a grouping of properties about a given cell
+            min_size: float, the approximate minimum cell size
+    OUTPUTS:
+            half the side length of a bounding box
+    """
+
+    major_axis = [region_props[i].axis_major_length for i, _ in enumerate(region_props)]
+    intensity = [region_props[i].intensity for i, _ in enumerate(region_props)]
+    
+    std_intensity = np.std(intensity)
+    std_major_axis = np.std(major_axis)
+    mean_intensity = np.mean(intensity)
+    mean_major_axis = np.mean(major_axis)
+
+    bb_side_lengths = []
+    for i, _ in enumerate(region_props):
+        z_score = 0.5 * ( (major_axis[i] - mean_major_axis) / std_major_axis + (intensity[i] - mean_intensity)  / std_intensity )
+        percentile = scipy.integrate.quad(
+            lambda x: (1/2*np.py)*np.e**(-x**2/2),
+            -np.inf,
+            z_score
+        )
+        bb_side_lengths.append(max_size * percentile)
+            
+    print(np.array(bb_side_lengths))
+    return np.array(bb_side_lengths) // 2
+
+
+def iou_with_list(input_box: list, boxes_list: list[list]) -> list:
+    '''
+    Computes the IOU of an input box with all boxes in a given list
+    ----------------------------------------------------------------
+    INPUTS:
+        input_box: list, of the form [x1, y1, x2, y2], a single box
+        boxes_list: list, of the form [[x1, y1. x2, y2], [x1, y1, x2, y2]...]
+
+    OUPUT:
+        ious: list
+    '''
     ious = []
     for box in boxes_list:
 
@@ -150,7 +196,12 @@ def predict(
     points: Optional[list] = None,
     box_prompts=False,
     point_prompts=True,
-):
+) -> np.ndarray:
+    
+    '''
+    Implementation of FAIR's SAM using box or point prompts:
+    --------------------------------------------------------
+    '''
     segmentations = []
     if box_prompts == True:
 
@@ -171,6 +222,7 @@ def predict(
             boxes=transformed_boxes,
             multimask_output=False,
         )
+        
         masks = masks.detach().cpu().numpy()
 
     elif point_prompts == True:
@@ -184,7 +236,7 @@ def predict(
         masks, _, _ = predictor.predict(
             point_coords=np.array([points]),
             point_labels=np.array([1]),
-            box = None,
+            box=None,
             multimask_output=False,
         )
 
@@ -193,10 +245,9 @@ def predict(
             packed_mask = np.packbits(masks[h, 0, :, :], axis=0)
             segmentations.append(packed_mask)
     else:
-        packed_mask = np.packbits(masks[0, :, :], axis=0)
-        segmentations.append(packed_mask)
-
-    return segmentations
+        segmentations = np.packbits(masks[0, :, :], axis=0)
+        
+    return np.array(segmentations)
 
 
 def crop_regions_predict(
@@ -205,6 +256,9 @@ def crop_regions_predict(
     predictor,
     threshold_division : float,
     sigma : float,
+    struct_size : float, 
+    weights: Optional[tuple] = None,
+    min_size: Optional[float] = None,  
     point_prompts: bool = True,
     box_prompts: bool = False,
     to_segment: bool =True,
@@ -238,25 +292,31 @@ def crop_regions_predict(
             "there must be the same number of frames in the dna image and the corresponding phase image"
         ) from error
 
-    sam_current_image = None
     batch_size = 50
     discarded_box_counter = np.array([])
     dna_regions = []
     segmentations = []
     boxes = []
-    dna_image_region_props = preprocess_3d(dna_image_stack, threshold_division, sigma)
+    _, dna_image_region_props = preprocess_3d(dna_image_stack, threshold_division, sigma, struct_size)
 
-    for i in range(len(list(dna_image_region_props))):
+    for i, _ in enumerate(dna_image_region_props):
+
         frame_props = dna_image_region_props[f"Frame_{i}"]
-        box_size = get_box_size(frame_props, scaling_factor=2.5)
+        if weights != None and min_size != None:
+            box_sizes = get_box_size_scaled(frame_props, min_size, weights)
+        else:
+            box_size = get_box_size(frame_props, 2.5)
         dna_regions_temp = []
         segmentations_temp = []
         discarded_box_counter = np.append(discarded_box_counter, 0)
         sam_current_image = i
         sam_previous_image = None
 
-        for j in range(len(dna_image_region_props[f"Frame_{i}"])):
+        for j, _ in enumerate(dna_image_region_props[f'Frame_{i}']):
+
             y, x = frame_props[j].centroid
+            if weights != None and min_size != None:
+                box_size = box_sizes[j]
 
             x1, y1 = x - box_size, y + box_size  # top left
             x2, y2 = x + box_size, y - box_size  # bottom right
@@ -283,19 +343,20 @@ def crop_regions_predict(
                         predictor.set_image(phase_image_rgb)
                         sam_previous_image = sam_current_image
 
+
                     if box_prompts == True:
                         if len(boxes) == batch_size or (j + 1) == len(
                             dna_image_region_props[f"Frame_{i}"]
                         ):
-                            segmentations_temp = predict(
-                                predictor, phase_image_rgb, boxes = boxes, box_prompts=True
-                            )
+                            masks = predict( predictor, phase_image_rgb, boxes = boxes, box_prompts=True )
+                            for l in range(masks.shape[0]):
+                                segmentations_temp.append(masks[l])
                             boxes = []
                     elif point_prompts == True:
                         points = [x, y]
-                        segmentations_temp = predict(
+                        segmentations_temp.append(predict(
                             predictor, phase_image_rgb, points = points, point_prompts=True
-                        )
+                        ))
                 else:
                     pass
 
@@ -311,12 +372,12 @@ def crop_regions_predict(
     return dna_regions, discarded_box_counter, dna_image_region_props, segmentations
 
 
-def counter(image_region_props, discarded_box_counter):
+def counter(image_region_props: skimage.measure.regionprops, discarded_box_counter: np.ndarray) -> tuple[float, np.ndarray]:
     """
     Counts the number of cells per frame and number of frames processed through either crop_regions or crop_regions_predict
     ------------------------------------------------------------------------------------------------------------------------
     INPUTS:
-      image_region_props: dict, initial region props dictionary generated within the crop_regions function
+      image_region_props: skimage.measure.region_rops, initial region props dictionary generated within the crop_regions function
       discarded_box_counter: vector of integers corresponding to the number of roi's that had to be discarded due to 'incomplete' bounding boxes
                              i.e. spilling out of the image. can be indexed as discarded_box_counter[mu] where mu is the frame number
 
@@ -326,17 +387,16 @@ def counter(image_region_props, discarded_box_counter):
     """
 
     frame_count = len(list(image_region_props))
-    cell_count = []
-    for i in range(frame_count):
-        cell_count.append(
-            int(len((image_region_props[f"Frame_{i}"])) - discarded_box_counter[i])
-        )
+    cell_count = [
+        int(len(image_region_props[f"Frame_{i}"]) - discarded_box_counter[i]) for i in range(frame_count)
+        ]
+    
 
     cell_count = np.array(cell_count)
     return frame_count, cell_count
 
 
-def clean_regions(regions, frame_count, cell_count, threshold_division : float, sigma: float):
+def clean_regions(regions: np.ndarray, frame_count: float, cell_count: np.ndarray, threshold_division : float, sigma: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     INPUTS:
           regions: must the output of 'crop_regions', is a dict containg all cropped regions
@@ -380,7 +440,7 @@ def clean_regions(regions, frame_count, cell_count, threshold_division : float, 
     return cleaned_regions, cleaned_intensity_regions, masks
 
 
-def add_labels(data_frame, labels):
+def add_labels(data_frame: np.ndarray, labels: np.ndarray) -> np.ndarray:
     """
     Adds labels to a dataframe in the labels and dataframe are of the same dimension and have the same number of rows
     ------------------------------------------------------------------------------------------------------------------

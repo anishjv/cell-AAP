@@ -2,7 +2,7 @@ import os
 import cv2
 from PIL import Image
 import numpy as np
-from cell_AAP.data_module import annotation_utils
+from cell_AAP.annotation import annotation_utils #type:ignore
 
 
 

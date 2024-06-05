@@ -3,7 +3,7 @@ import logging
 
 import napari
 import cell_AAP.napari.ui as ui  # type:ignore
-import cell_AAP.data_module.annotation_utils as au  # type:ignore
+import cell_AAP.annotation.annotation_utils as au  # type:ignore
 
 import numpy as np
 import cv2
@@ -20,8 +20,6 @@ from detectron2.config import get_cfg
 from qtpy import QtWidgets
 
 setup_logger()
-TORCH_VERSION = ".".join(torch.__version__.split(".")[:2])
-CUDA_VERSION = torch.__version__.split("+")[-1]
 
 __all__ = [
     "create_cellAAP_widget",
@@ -197,7 +195,12 @@ def configure(cellaap_widget: ui.cellAAPWidget):
     model = get_model(cellaap_widget)
     cellaap_widget.cfg.merge_from_file(model.fetch("config.yaml"))
     cellaap_widget.cfg.MODEL.WEIGHTS = model.fetch("model_0004999.pth")
-    cellaap_widget.cfg.MODEL.DEVICE = "cpu"
+    
+    if torch.cuda.is_available():
+        cellaap_widget.cfg.MODEL.DEVICE = "cuda"
+    else:
+        cellaap_widget.cfg.MODEL.DEVICE = "cpu"
+
 
     if cellaap_widget.confluency_est.value():
         cellaap_widget.cfg.TEST.DETECTIONS_PER_IMAGE = (
@@ -256,7 +259,7 @@ def grab_file(cellaap_widget):
         cellaap_widget: instance of ui.cellAAPWidget()
     """
 
-    file_filter = "TIFF (*.tiff, *.tif);; Other (*.jpg, *.png)"
+    file_filter = "TIFF (*.tiff, *.tif);; JPEG (*.jpg);; PNG (*.png)"
     file_grabber = QtWidgets.QFileDialog.getOpenFileName(
         parent=cellaap_widget,
         caption="Select a file",
