@@ -21,8 +21,6 @@ class Annotator:
         self.phase_image_list = phase_image_list
         self.phase_image_stack = phase_image_stack
         self.configs = configs
-        #self.point_prompts = True
-        #self.box_prompts = False
         self.frame_count = self.cell_count = None
         self.cleaned_binary_roi = self.cleaned_scalar_roi = None
         self.masks =  self.roi = self.labels = self.coords = self.segmentations = None
@@ -43,7 +41,7 @@ class Annotator:
                 "dna_image_list and phase_image_list must be of the same length (number of files)"
             ) from error
         
-        frame_step = configs.frane_step
+        frame_step = configs.frame_step
         if len(dna_image_list) > 1:
             dna_image_stack = [tiff.imread(dna_image_list[i])[0::frame_step, :, :] for i,_ in enumerate(dna_image_list)]
             phase_image_stack = [tiff.imread(phase_image_list[i])[0::frame_step, :, :] for i,_ in enumerate(phase_image_list)]
@@ -100,7 +98,7 @@ class Annotator:
             predictor,
             self.configs.threshold_division,
             self.configs.gaussian_sigma,
-            self.congigs.erosionstruct, 
+            self.configs.erosionstruct, 
             self.configs.tophatstruct,
             self.configs.box_size,
             self.configs.point_prompts,
@@ -112,7 +110,7 @@ class Annotator:
             region_props_stack, self.discarded_box_counter
         )
         self.cleaned_binary_roi, self.cleaned_scalar_roi, self.masks = clean_regions(
-            self.roi, self.frame_count, self.cell_count, self.configs.threshold_division, self.gaussian_sigma
+            self.roi, self.frame_count, self.cell_count, self.configs.threshold_division, self.configs.gaussian_sigma
         )
         self.cropped = True
         return self
@@ -139,7 +137,7 @@ class Annotator:
                 "the method, crop(), must be called before the method gen_df()"
             )
         try:
-            assert isinstance(self.props_list, list)
+            assert isinstance(self.conifgs.propslist, list)
         except Exception as error:
             raise AssertionError("props_list must be of type 'list'") from error
         try:
@@ -157,7 +155,7 @@ class Annotator:
                     props = regionprops_table(
                         self.cleaned_binary_roi[i][j].astype("uint8"),
                         intensity_image=self.cleaned_scalar_roi[i][j],
-                        properties=self.configs.props_list,
+                        properties=self.configs.propslist,
                         extra_properties=extra_props,
                     )
 
@@ -171,4 +169,3 @@ class Annotator:
                     pass
 
         return np.array(main_df)
-

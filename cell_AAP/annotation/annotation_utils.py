@@ -158,9 +158,9 @@ def get_box_size_scaled(region_props, max_size: float) -> list[float]:
     return np.array(bb_side_lengths) // 2
 
 
-def box_size_wrapper(func, args):
+def box_size_wrapper(func, frame_props, args):
     try:
-        return func(*args)
+        return func(frame_props, *args)
     except Exception as error:
         raise AttributeError('args do not match function') from error
 
@@ -305,13 +305,13 @@ def crop_regions_predict(
     segmentations = []
     boxes = []
     box_size_func = box_size[0]
-    box_size_args = box_size[1:]
+    box_size_args = box_size[1]
     _, dna_image_region_props = preprocess_3d(dna_image_stack, threshold_division, sigma, erosionstruct, tophatstruct)
 
     for i, _ in enumerate(dna_image_region_props):
 
         frame_props = dna_image_region_props[f"Frame_{i}"]
-        box_sizes = box_size_wrapper(box_size_func, *box_size_args)
+        box_sizes = box_size_wrapper(box_size_func, frame_props, box_size_args)
         dna_regions_temp = []
         segmentations_temp = []
         discarded_box_counter = np.append(discarded_box_counter, 0)
@@ -322,10 +322,10 @@ def crop_regions_predict(
 
             y, x = frame_props[j].centroid
             if isinstance(box_sizes, list):
-                box_size = box_sizes[j]
+                box_sizes = box_sizes[j]
 
-            x1, y1 = x - box_size, y + box_size  # top left
-            x2, y2 = x + box_size, y - box_size  # bottom right
+            x1, y1 = x - box_sizes, y + box_sizes  # top left
+            x2, y2 = x + box_sizes, y - box_sizes  # bottom right
 
             coords_temp = [x1, y2, x2, y1]
 
