@@ -2,6 +2,8 @@ import os
 import cv2
 from PIL import Image
 import numpy as np
+#TODO
+#cannot import this module without installing cell-AAP, this should not be the case, throws "no module 'cell-AAP' error"
 from cell_AAP.annotation import annotation_utils #type:ignore
 
 

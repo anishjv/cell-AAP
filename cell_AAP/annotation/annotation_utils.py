@@ -14,7 +14,7 @@ from typing import Optional
 import scipy
 
 
-def preprocess_2d(image: np.ndarray, threshold_division : float, sigma : float, strel_cell=square(71)) -> tuple[np.ndarray, np.ndarray]:
+def preprocess_2d(image: np.ndarray, threshold_division : float, sigma : float, tophatstruct=square(71)) -> tuple[np.ndarray, np.ndarray]:
     """
     Preprocesses a specified image
     ------------------------------
@@ -30,7 +30,7 @@ def preprocess_2d(image: np.ndarray, threshold_division : float, sigma : float, 
 
     im = gaussian(image, sigma)  # 2D gaussian smoothing filter to reduce noise
     im = white_tophat(
-        im, strel_cell
+        im, tophatstruct
     )  # Background subtraction + uneven illumination correction
     thresh_im = threshold_otsu(im)
     redseg = im > (
@@ -42,7 +42,7 @@ def preprocess_2d(image: np.ndarray, threshold_division : float, sigma : float, 
     return labels, redseg
 
 
-def preprocess_3d(targetstack: np.ndarray, threshold_division : float, sigma : float, struct_size: float, strel_cell=square(71)) -> tuple[np.ndarray, skimage.measure.regionprops]:
+def preprocess_3d(targetstack: np.ndarray, threshold_division : float, sigma : float, erosionstruct, tophatstruct) -> tuple[np.ndarray, skimage.measure.regionprops]:
     """
     Preprocesses a stack of images
     ------------------------------
@@ -61,10 +61,10 @@ def preprocess_3d(targetstack: np.ndarray, threshold_division : float, sigma : f
         im = targetstack[i, :, :].copy()
         im = gaussian(im, sigma)  # 2D gaussian smoothing filter to reduce noise
         im = white_tophat(
-            im, strel_cell
+            im, tophatstruct
         )  # Background subtraction + uneven illumination correction
         thresh_im = threshold_otsu(im)
-        im = erosion(im, disk(struct_size))
+        im = erosion(im, erosionstruct)
         redseg = im > (
             thresh_im / (threshold_division + 0.25)
         )  # only keep pixels above the threshold
@@ -148,7 +148,7 @@ def get_box_size_scaled(region_props, max_size: float) -> list[float]:
     for i, _ in enumerate(region_props):
         z_score = 0.5 * ( (major_axis[i] - mean_major_axis) / std_major_axis + (intensity[i] - mean_intensity)  / std_intensity )
         percentile = scipy.integrate.quad(
-            lambda x: (1/2*np.py)*np.e**(-x**2/2),
+            lambda x: (1/2*np.pi)*np.e**(-x**2/2),
             -np.inf,
             z_score
         )
@@ -156,6 +156,13 @@ def get_box_size_scaled(region_props, max_size: float) -> list[float]:
             
     print(np.array(bb_side_lengths))
     return np.array(bb_side_lengths) // 2
+
+
+def box_size_wrapper(func, args):
+    try:
+        return func(*args)
+    except Exception as error:
+        raise AttributeError('args do not match function') from error
 
 
 def iou_with_list(input_box: list, boxes_list: list[list]) -> list:
@@ -256,9 +263,9 @@ def crop_regions_predict(
     predictor,
     threshold_division : float,
     sigma : float,
-    struct_size : float, 
-    weights: Optional[tuple] = None,
-    min_size: Optional[float] = None,  
+    erosionstruct,
+    tophatstruct,
+    box_size:tuple,  
     point_prompts: bool = True,
     box_prompts: bool = False,
     to_segment: bool =True,
@@ -297,15 +304,14 @@ def crop_regions_predict(
     dna_regions = []
     segmentations = []
     boxes = []
-    _, dna_image_region_props = preprocess_3d(dna_image_stack, threshold_division, sigma, struct_size)
+    box_size_func = box_size[0]
+    box_size_args = box_size[1:]
+    _, dna_image_region_props = preprocess_3d(dna_image_stack, threshold_division, sigma, erosionstruct, tophatstruct)
 
     for i, _ in enumerate(dna_image_region_props):
 
         frame_props = dna_image_region_props[f"Frame_{i}"]
-        if weights != None and min_size != None:
-            box_sizes = get_box_size_scaled(frame_props, min_size, weights)
-        else:
-            box_size = get_box_size(frame_props, 2.5)
+        box_sizes = box_size_wrapper(box_size_func, *box_size_args)
         dna_regions_temp = []
         segmentations_temp = []
         discarded_box_counter = np.append(discarded_box_counter, 0)
@@ -315,7 +321,7 @@ def crop_regions_predict(
         for j, _ in enumerate(dna_image_region_props[f'Frame_{i}']):
 
             y, x = frame_props[j].centroid
-            if weights != None and min_size != None:
+            if isinstance(box_sizes, list):
                 box_size = box_sizes[j]
 
             x1, y1 = x - box_size, y + box_size  # top left

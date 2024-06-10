@@ -4,6 +4,7 @@ import tifffile as tiff
 from skimage.measure import regionprops_table
 from annotation_utils import *
 from typing import Optional
+from cell_AAP import configs
 
 
 class Annotator:
@@ -13,15 +14,15 @@ class Annotator:
         dna_image_stack,
         phase_image_list,
         phase_image_stack,
-        props_list,
+        configs:configs.Cfg,
     ):
         self.dna_image_list = dna_image_list
         self.dna_image_stack = dna_image_stack
         self.phase_image_list = phase_image_list
         self.phase_image_stack = phase_image_stack
-        self.props_list = props_list
-        self.point_prompts = True
-        self.box_prompts = False
+        self.configs = configs
+        #self.point_prompts = True
+        #self.box_prompts = False
         self.frame_count = self.cell_count = None
         self.cleaned_binary_roi = self.cleaned_scalar_roi = None
         self.masks =  self.roi = self.labels = self.coords = self.segmentations = None
@@ -33,7 +34,7 @@ class Annotator:
         return "Instance of class, Processor, implemented to process microscopy images into regions of interest"
 
     @classmethod
-    def get(cls, props_list:list[str], dna_image_list:list[str], phase_image_list:list[str], frame_step:Optional[int]=1):
+    def get(cls, configs:configs.Cfg, dna_image_list:list[str], phase_image_list:list[str]):
 
         try:
             assert len(dna_image_list) == len(phase_image_list)
@@ -41,7 +42,8 @@ class Annotator:
             raise AssertionError(
                 "dna_image_list and phase_image_list must be of the same length (number of files)"
             ) from error
-
+        
+        frame_step = configs.frane_step
         if len(dna_image_list) > 1:
             dna_image_stack = [tiff.imread(dna_image_list[i])[0::frame_step, :, :] for i,_ in enumerate(dna_image_list)]
             phase_image_stack = [tiff.imread(phase_image_list[i])[0::frame_step, :, :] for i,_ in enumerate(phase_image_list)]
@@ -57,7 +59,7 @@ class Annotator:
             dna_image_stack,
             phase_image_list,
             phase_image_stack,
-            props_list,
+            configs,
         )
 
     @property
@@ -84,7 +86,7 @@ class Annotator:
     def dna_image_stack(self, dna_image_stack):
         self._dna_image_stack = dna_image_stack
 
-    def crop(self, threshold_division, sigma, struct_size, weights: Optional[tuple] = None, min_size : Optional[float] = None, segment=True, predictor=None):
+    def crop(self, predictor=None):
         if predictor == None:
             self.to_segment == False
         (
@@ -96,13 +98,13 @@ class Annotator:
             self.dna_image_stack,
             self.phase_image_stack,
             predictor,
-            threshold_division,
-            sigma,
-            struct_size, 
-            weights,  
-            min_size,  
-            self.point_prompts,
-            self.box_prompts,
+            self.configs.threshold_division,
+            self.configs.gaussian_sigma,
+            self.congigs.erosionstruct, 
+            self.configs.tophatstruct,
+            self.configs.box_size,
+            self.configs.point_prompts,
+            self.configs.box_prompts,
             self.to_segment,
         )
 
@@ -110,7 +112,7 @@ class Annotator:
             region_props_stack, self.discarded_box_counter
         )
         self.cleaned_binary_roi, self.cleaned_scalar_roi, self.masks = clean_regions(
-            self.roi, self.frame_count, self.cell_count, threshold_division, sigma
+            self.roi, self.frame_count, self.cell_count, self.configs.threshold_division, self.gaussian_sigma
         )
         self.cropped = True
         return self
@@ -155,7 +157,7 @@ class Annotator:
                     props = regionprops_table(
                         self.cleaned_binary_roi[i][j].astype("uint8"),
                         intensity_image=self.cleaned_scalar_roi[i][j],
-                        properties=self.props_list,
+                        properties=self.configs.props_list,
                         extra_properties=extra_props,
                     )
 
