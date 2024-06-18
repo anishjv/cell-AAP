@@ -104,7 +104,7 @@ class Annotator:
             self.configs.point_prompts,
             self.configs.box_prompts,
             self.to_segment,
-            self.congigs.threshold_type
+            self.configs.threshold_type
         )
 
         self.frame_count, self.cell_count = counter(
