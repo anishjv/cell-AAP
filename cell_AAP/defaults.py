@@ -5,7 +5,7 @@ import cell_AAP.annotation.annotation_utils as au
 
 _HELA = {}
 _HELA['VERSION'] = 1
-_HELA['THRESHOLD'] = skimage.filters.threshold_isodata
+_HELA['THRESHOLD_TYPE'] = 'single'
 _HELA['THRESHOLD_DIVISION'] = 0.75
 _HELA['TOPHATSTRUCT'] = skimage.morphology.square(71)
 _HELA['EROSIONSTRUCT'] = skimage.morphology.disk(8)

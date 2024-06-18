@@ -16,8 +16,13 @@ import pooch
 
 from detectron2.utils.logger import setup_logger
 from detectron2.engine import DefaultPredictor
+from detectron2.engine.defaults import create_ddp_model
 from detectron2.config import get_cfg
+from detectron2.checkpoint import DetectionCheckpointer
+from detectron2.config import LazyConfig, instantiate
 from qtpy import QtWidgets
+import timm
+from typing import Optional
 
 setup_logger()
 
@@ -46,7 +51,7 @@ def create_cellAAP_widget() -> ui.cellAAPWidget:
     "Creates instance of ui.cellAAPWidget and sets callbacks"
 
     cellaap_widget = ui.cellAAPWidget(
-        napari_viewer=napari.current_viewer(), cfg=get_cfg()
+        napari_viewer=napari.current_viewer(), cfg=None
     )
 
     cellaap_widget.inference_button.clicked.connect(
@@ -62,7 +67,6 @@ def create_cellAAP_widget() -> ui.cellAAPWidget:
     cellaap_widget.save_selector.clicked.connect(lambda: save(cellaap_widget))
 
     cellaap_widget.set_configs.clicked.connect(lambda: configure(cellaap_widget))
-
 
 
     return cellaap_widget
@@ -92,7 +96,6 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
         )
         return
 
-    cellaap_widget.predictor = DefaultPredictor(cellaap_widget.cfg)
     if len(im_array.shape) == 3:
         for frame in range(im_array.shape[0]):
             prog_count += 1
@@ -115,18 +118,22 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
 
     cellaap_widget.name = name.replace(".", "/").split("/")[-2]
     cellaap_widget.mask_array = np.array(mask_array)
+    model_name = cellaap_widget.model_selector.currentText()
 
     cellaap_widget.progress_bar.reset()
+    cellaap_widget.viewer.add_image(
+        im_array, name = cellaap_widget.name
+    )
     cellaap_widget.viewer.add_labels(
-        np.array(mask_array), name=cellaap_widget.name + "inf", opacity=0.2
+        np.array(mask_array), name=f"{cellaap_widget.name}_{model_name}_infmask", opacity=0.2
     )
     if points != ():
         points_array = np.vstack(points)
         cellaap_widget.viewer.add_points(
             points_array,
             ndim=points_array.shape[1],
-            name=name + "mitotic_centroids",
-            size=15,
+            name= f"{cellaap_widget.name}_{model_name}_infcents",
+            size=10,
         )
     cellaap_widget.mask_array = np.array(mask_array)
     
@@ -141,28 +148,27 @@ def inference(
     INPUTS:
         cellaap_widget: instance of ui.cellAAPWidget()
     """
-    if img.shape[0] != 2048:
-        half_diff = (2048 - img.shape) / 2
-        img = cv2.copyMakeBorder(
-            img,
-            half_diff,
-            half_diff,
-            half_diff,
-            half_diff,
-            cv2.BORDER_CONSTANT,
-            value=img.mean(),
-        )
+    
+    if cellaap_widget.model_type == 'yacs':
+        if img.shape[0] < 2048:
+            qdiff = (2048 - img.shape[0]) // 4
+            img = np.pad(img, [(qdiff, qdiff), (qdiff, qdiff), (0,0)], mode = 'constant', constant_values=img.mean())
+        output = cellaap_widget.predictor(img)
+    
+    else:
+        if img.shape[0] < 1024:
+            qdiff = (1024 - img.shape[0]) // 4
+            img = np.pad(img, [(qdiff, qdiff), (qdiff, qdiff), (0,0)], mode = 'constant', constant_values=img.mean())
+        elif img.shape[0] > 2048:
+            img = au.binImage(img, (1024, 1024))
 
-    output = cellaap_widget.predictor(img)
+        img_perm = np.moveaxis(img, -1, 0)
+        with torch.inference_mode():
+            output = cellaap_widget.predictor([{'image': torch.from_numpy(img_perm)}])[0]
+
     segmentations = output["instances"].pred_masks.to("cpu")
     labels = output["instances"].pred_classes.to("cpu")
-
-    seg_labeled = np.zeros_like(segmentations[0], int)
-    for i, mask in enumerate(segmentations):
-        if labels[i] == 0:
-            seg_labeled[mask] = 1
-        else:
-            seg_labeled[mask] = 100
+    seg_labeled = color_masks(segmentations, labels, method = 'custom', custom_dict = {0:1, 1:100})
 
     mitotic_centroids = []
     for i, class_label in enumerate(labels):
@@ -192,27 +198,56 @@ def configure(cellaap_widget: ui.cellAAPWidget):
         cellaap_widget: instance of ui.cellAAPWidget()
     """
 
-    model = get_model(cellaap_widget)
-    cellaap_widget.cfg.merge_from_file(model.fetch("config.yaml"))
-    cellaap_widget.cfg.MODEL.WEIGHTS = model.fetch("model_0004999.pth")
+    model, model_type = get_model(cellaap_widget)
+    if model_type == 'yacs':
+        cellaap_widget.model_type = 'yacs'
+        cellaap_widget.cfg = get_cfg()
+        cellaap_widget.cfg.merge_from_file(model.fetch("config.yaml"))
+        cellaap_widget.cfg.MODEL.WEIGHTS = model.fetch("model_0004999.pth")
     
-    if torch.cuda.is_available():
-        cellaap_widget.cfg.MODEL.DEVICE = "cuda"
+        if torch.cuda.is_available():
+            cellaap_widget.cfg.MODEL.DEVICE = "cuda"
+        else:
+            cellaap_widget.cfg.MODEL.DEVICE = "cpu"
+
+
+        if cellaap_widget.confluency_est.value():
+            cellaap_widget.cfg.TEST.DETECTIONS_PER_IMAGE = (
+                cellaap_widget.confluency_est.value()
+            )
+        if cellaap_widget.thresholder.value():
+            cellaap_widget.cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = (
+                cellaap_widget.thresholder.value()
+            )
+        predictor = DefaultPredictor(cellaap_widget.cfg)
+
     else:
-        cellaap_widget.cfg.MODEL.DEVICE = "cpu"
+        cellaap_widget.model_type = 'lazy'
+        cellaap_widget.cfg = LazyConfig.load(model.fetch("config.yml"))
+        cellaap_widget.cfg.train.init_checkpoint = model.fetch("model_0008399.pth")
 
+        if torch.cuda.is_available():
+            cellaap_widget.cfg.train.device = 'cuda'
+        else:
+            cellaap_widget.cfg.train.device = 'cpu'
 
-    if cellaap_widget.confluency_est.value():
-        cellaap_widget.cfg.TEST.DETECTIONS_PER_IMAGE = (
-            cellaap_widget.confluency_est.value()
-        )
-    if cellaap_widget.thresholder.value():
-        cellaap_widget.cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = (
-            cellaap_widget.thresholder.value()
-        )
+        if cellaap_widget.confluency_est.value():
+            cellaap_widget.cfg.model.proposal_generator.post_nms_topk[1] = cellaap_widget.confluency_est.value()
+        
+        if cellaap_widget.thresholder.value():
+            cellaap_widget.cfg.model.roi_heads.box_predictor.test_score_thresh = cellaap_widget.thresholder.value()
+            
+        predictor = instantiate(cellaap_widget.cfg.model)
+        predictor.to(cellaap_widget.cfg.train.device)
+        predictor = create_ddp_model(predictor)
+        DetectionCheckpointer(predictor).load(cellaap_widget.cfg.train.init_checkpoint)
+        predictor.eval()
 
     napari.utils.notifications.show_info(f"Configurations successfully saved")
     cellaap_widget.configured = True
+    cellaap_widget.predictor = predictor
+    
+    
 
 
 def image_select(cellaap_widget: ui.cellAAPWidget):
@@ -297,15 +332,22 @@ def get_model(cellaap_widget):
         cellaap_widget: instance of ui.cellAAPWidget()I
     """
 
-    model_name = cellaap_widget._widgets["model_selector"].currentText()
+    model_name = cellaap_widget.model_selector.currentText()
 
-    url_registry = {"HeLa": "doi:10.5281/zenodo.11387359/"}
+    url_registry = {
+        "HeLa": "doi:10.5281/zenodo.11387359",
+        "HeLa_former": "doi:10.5281/zenodo.11951629"
+                    }
 
     weights_registry = {
-        "HeLa": ("model_0004999.pth", "md5:8cccf01917e4f04e4cfeda0878bc1f8a")
+        "HeLa": ("model_0004999.pth", "md5:8cccf01917e4f04e4cfeda0878bc1f8a"),
+        "HeLa_former": ("model_0008399.pth", "md5:9dd789fab740d976c27f9d179128629d")
     }
 
-    configs_registry = {"HeLa": ("config.yaml", "md5:cf1532e9bc0ed07285554b1e28f942de")}
+    configs_registry = {
+        "HeLa": ("config.yaml", "md5:cf1532e9bc0ed07285554b1e28f942de", 'yacs'),
+        "HeLa_former": ("config.yml", "md5:0d2c6dd677ff7bcda80e0e297c1b6766" , 'lazy')
+        }
 
     model = pooch.create(
         path=pooch.os_cache("cell_aap"),
@@ -315,10 +357,16 @@ def get_model(cellaap_widget):
             configs_registry[f"{model_name}"][0]: configs_registry[f"{model_name}"][1],
         },
     )
-    return model
+
+    model_type = configs_registry[f"{model_name}"][2]
+
+    return model, model_type
 
 
 def save(cellaap_widget):
+    """
+    Saves a given napari layer
+    """
 
     try:
         filepath = cellaap_widget.dir_grabber
@@ -333,3 +381,31 @@ def save(cellaap_widget):
         os.path.join(filepath, f"{cellaap_widget.name}_inf.tif"),
         np.array(cellaap_widget.mask_array).astype("uint16"),
     )
+
+
+def color_masks(segmentations: np.ndarray, labels, method:Optional[str] = 'random', custom_dict:Optional[dict[int:int]] = None) -> np.ndarray:
+    """
+    Takes an array of segmentation masks and colors them by some pre-defined metric. If metric is not given masks are colored randomely
+    -------------------------------------------------------------------------------------------------------------------------------------
+    INPUTS:
+        segmentations: np.ndarray
+        labels: list
+        method: str
+        custom_dict: dict
+    OUTPUTS:
+        seg_labeled: np.ndarray
+    """
+
+    seg_labeled = np.zeros_like(segmentations[0], int)
+    if method == 'custom':
+        for i, mask in enumerate(segmentations):
+            for j in custom_dict.keys():
+                if labels[i] == j:
+                    seg_labeled[mask] = custom_dict[j]
+    
+    if method == 'random':
+        for i, mask in enumerate(segmentations):
+            seg_labeled[mask] = i
+
+    return seg_labeled
+

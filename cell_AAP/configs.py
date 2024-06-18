@@ -8,7 +8,7 @@ class Cfg:
    def __init__(
            self,
            version:float,
-           threshold:skimage.filters,
+           threshold_type:skimage.filters,
            threshold_division: float,
            tophatstruct:skimage.morphology,
            erosionstruct:skimage.morphology,
@@ -20,7 +20,7 @@ class Cfg:
            box_size:tuple
    ):
        self.VERSION = version
-       self.threshold = threshold
+       self.threshold_type = threshold_type
        self.threshold_division = threshold_division
        self.tophatstruct = tophatstruct
        self.erosionstruct = erosionstruct
@@ -40,7 +40,7 @@ class Cfg:
        try:
             return cls(
                 version = default['VERSION'],
-                threshold = default['THRESHOLD'],
+                threshold_type = default['THRESHOLD_TYPE'],
                 threshold_division = default['THRESHOLD_DIVISION'],
                 tophatstruct = default['TOPHATSTRUCT'],
                 erosionstruct = default['EROSIONSTRUCT'],

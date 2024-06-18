@@ -9,12 +9,13 @@ from skimage.segmentation import clear_border
 from skimage.filters import (
     gaussian,
     threshold_otsu,
+    threshold_multiotsu
 )  # pylint: disable=no-name-in-module
 from typing import Optional
 import scipy
 
 
-def preprocess_2d(image: np.ndarray, threshold_division : float, sigma : float, tophatstruct=square(71)) -> tuple[np.ndarray, np.ndarray]:
+def preprocess_2d(image: np.ndarray, threshold_division : float, sigma : float, threshold_type: str = 'single', tophatstruct=square(71)) -> tuple[np.ndarray, np.ndarray]:
     """
     Preprocesses a specified image
     ------------------------------
@@ -32,17 +33,21 @@ def preprocess_2d(image: np.ndarray, threshold_division : float, sigma : float, 
     im = white_tophat(
         im, tophatstruct
     )  # Background subtraction + uneven illumination correction
-    thresh_im = threshold_otsu(im)
-    redseg = im > (
-        thresh_im / threshold_division
-    )  # only keep pixels above the threshold
+    if threshold_type == 'multi':
+        thresholds = threshold_multiotsu(im)
+        redseg = np.digitize(im, bins = thresholds)
+    else:
+        thresh = threshold_otsu(im)
+        redseg = im > (
+            thresh / threshold_division
+        )
     lblred = label(redseg)
     labels = label(lblred)
 
     return labels, redseg
 
 
-def preprocess_3d(targetstack: np.ndarray, threshold_division : float, sigma : float, erosionstruct, tophatstruct) -> tuple[np.ndarray, skimage.measure.regionprops]:
+def preprocess_3d(targetstack: np.ndarray, threshold_division : float, sigma : float, threshold_type: str, erosionstruct, tophatstruct) -> tuple[np.ndarray, skimage.measure.regionprops]:
     """
     Preprocesses a stack of images
     ------------------------------
@@ -63,17 +68,48 @@ def preprocess_3d(targetstack: np.ndarray, threshold_division : float, sigma : f
         im = white_tophat(
             im, tophatstruct
         )  # Background subtraction + uneven illumination correction
-        thresh_im = threshold_otsu(im)
-        im = erosion(im, erosionstruct)
-        redseg = im > (
-            thresh_im / (threshold_division + 0.25)
-        )  # only keep pixels above the threshold
-        lblred = label(redseg)
 
+        im = erosion(im, erosionstruct)
+        if threshold_type == 'multi':
+            thresholds = threshold_multiotsu(im)
+            redseg = np.digitize(im, bins = thresholds)
+
+        else:
+            thresh = threshold_otsu(im)
+            redseg = im > (
+                thresh / threshold_division
+            )
+
+        lblred = label(redseg)
         labels = label(lblred)
         region_props[f"Frame_{i}"] = regionprops(labels, intensity_image = labels * im)
 
     return labels, region_props
+
+
+def preprocess_2d_temp(image: np.ndarray, threshold_division : float, sigma : float, tophatstruct=square(71)) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Preprocesses a specified image
+    ------------------------------
+    INPUTS:
+        image: n-darray
+        strel_cell: n-darray, structuring element for white_tophat
+        threshold_division: float or int
+        sigma: float or int
+    OUTPUTS:
+        redseg: n-darray, segmented targetstack
+        labels: n-darray, labeled redseg
+    """
+    im = gaussian(image, sigma)
+    im = white_tophat(
+            im, tophatstruct
+        )
+    thresholds = threshold_multiotsu(im)
+    redseg = np.digitize(im, bins = thresholds)
+    lblred = label(redseg)
+    labels = label(lblred)
+
+    return labels, redseg, im
 
 
 def bw_to_rgb(image: np.ndarray, max_pixel_value:Optional[int]=255, min_pixel_value:Optional[int]=0) -> np.ndarray:
@@ -269,6 +305,7 @@ def crop_regions_predict(
     point_prompts: bool = True,
     box_prompts: bool = False,
     to_segment: bool =True,
+    threshold_type:str = 'single'
 ):
     """
     Given a stack of flouresence microscopy images, D, and corresponding phase images, P, returns regions cropped from D and masks from P, for each cell
@@ -306,7 +343,7 @@ def crop_regions_predict(
     boxes = []
     box_size_func = box_size[0]
     box_size_args = box_size[1]
-    _, dna_image_region_props = preprocess_3d(dna_image_stack, threshold_division, sigma, erosionstruct, tophatstruct)
+    _, dna_image_region_props = preprocess_3d(dna_image_stack, threshold_division, sigma, threshold_type, erosionstruct, tophatstruct)
 
     for i, _ in enumerate(dna_image_region_props):
 
@@ -402,7 +439,7 @@ def counter(image_region_props: skimage.measure.regionprops, discarded_box_count
     return frame_count, cell_count
 
 
-def clean_regions(regions: np.ndarray, frame_count: float, cell_count: np.ndarray, threshold_division : float, sigma: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def clean_regions(regions: np.ndarray, frame_count: float, cell_count: np.ndarray, threshold_division : float, sigma: float, threshold_type:str = 'single') -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     INPUTS:
           regions: must the output of 'crop_regions', is a dict containg all cropped regions
@@ -427,7 +464,7 @@ def clean_regions(regions: np.ndarray, frame_count: float, cell_count: np.ndarra
         cleaned_intensity_regions_temp = []
 
         for j in range(int(cell_count[i])):
-            mask = preprocess_2d(regions[i][j], threshold_division, sigma)[1]
+            mask = preprocess_2d(regions[i][j], threshold_division, sigma, threshold_type)[1]
             cleaned_mask = clear_border(mask)
             cleaned_intensity_regions_temp.append(
                 np.multiply(regions[i][j], cleaned_mask)
@@ -465,3 +502,35 @@ def add_labels(data_frame: np.ndarray, labels: np.ndarray) -> np.ndarray:
         )
 
     return data_frame
+
+
+def binImage(img:np.ndarray, new_shape:tuple, method :str = 'mean') -> np.ndarray:
+    '''
+    img = Original array to be binned
+    new_shape = final desired shape of the array
+    method = 'min' - minimum binned
+             'max' - max. binned
+             'mean' - mean binned; default
+    '''
+    if len(img.shape) == 3:
+          shape = (new_shape[0], img.shape[0] // new_shape[0],
+                new_shape[1], img.shape[1] // new_shape[1], 
+                3)
+          index0 = -2
+          index1 = 1
+    elif len(img.shape) == 2:   
+        shape = (new_shape[0], img.shape[0] // new_shape[0],
+                new_shape[1], img.shape[1] // new_shape[1])
+        index0 = -1
+        index1 = 1
+    else:
+          print('Input image must be either RGB like, (3 dimensional) or black and white (2 dimensional)')
+          return
+    img = img.reshape(shape)
+    if   method == 'min':
+            out = img.min(index0).min(index1)
+    elif method == 'max':
+            out = img.max(index0).max(index1)
+    elif method == 'mean':
+            out = img.mean(index0).mean(index1)
+    return out

@@ -104,13 +104,14 @@ class Annotator:
             self.configs.point_prompts,
             self.configs.box_prompts,
             self.to_segment,
+            self.congigs.threshold_type
         )
 
         self.frame_count, self.cell_count = counter(
             region_props_stack, self.discarded_box_counter
         )
         self.cleaned_binary_roi, self.cleaned_scalar_roi, self.masks = clean_regions(
-            self.roi, self.frame_count, self.cell_count, self.configs.threshold_division, self.configs.gaussian_sigma
+            self.roi, self.frame_count, self.cell_count, self.configs.threshold_division, self.configs.gaussian_sigma, self.configs.threshold_type
         )
         self.cropped = True
         return self

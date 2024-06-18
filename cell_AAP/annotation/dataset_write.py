@@ -8,7 +8,7 @@ from cell_AAP.annotation import annotation_utils #type:ignore
 
 
 
-def write_coco_conv_dataset(parent_dir : str, phase_image_stack, segmentations, labeled_data_frame, name : str, label_to_class : dict):
+def write_coco_conv_dataset(parent_dir : str, phase_image_stack, segmentations, labeled_data_frame, name : str, label_to_class : dict, bin_size:tuple = (1024, 1024), bin_method :str = 'max'):
     '''
     Saves annotations(masks) and images in a manner that can be converted to COCO format using common tools
     -------------------------------------------------------------------------------------------------------
@@ -57,6 +57,7 @@ def write_coco_conv_dataset(parent_dir : str, phase_image_stack, segmentations, 
                 count = 2048
         )
         mask = mask * 255
+        mask  = annotation_utils.binImage(mask, bin_size, bin_method)
         if labeled_data_frame[j, -1] == 0:
             cv2.imwrite(
                         f'{int(labeled_data_frame[j, -3])}_{label_to_class[0]}_frame{int(labeled_data_frame[j, -3])}cell{int(labeled_data_frame[j, -2])}.png', 
@@ -79,6 +80,7 @@ def write_coco_conv_dataset(parent_dir : str, phase_image_stack, segmentations, 
             os.chdir(os.path.join(test_path, 'images'))
 
         image = Image.fromarray( annotation_utils.bw_to_rgb(phase_image_stack[k]) )
+        image = annotation_utils.binImage(image, bin_size, bin_method)
         image.save(f'{k}.jpg')
         
     
