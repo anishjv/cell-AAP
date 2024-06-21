@@ -52,15 +52,15 @@ def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
 
     thresholder = QtWidgets.QDoubleSpinBox()
     thresholder.setRange(0, 100)
-    thresholder.setValue(0.5)
+    thresholder.setValue(0.25)
     thresholder.setStepType(QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType)
     thresholder.setToolTip("Set Confidence Hyperparameter")
     thresholder.setWrapping(True)
     widgets["thresholder"] = ("Confidence Threshold", thresholder)
 
     confluency_est = QtWidgets.QSpinBox()
-    confluency_est.setRange(100, 2000)
-    confluency_est.setValue(500)
+    confluency_est.setRange(100, 5000)
+    confluency_est.setValue(2000)
     confluency_est.setStepType(QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType)
     confluency_est.setToolTip("Estimate the number of cells in a frame")
 

@@ -24,8 +24,8 @@ def write_coco_conv_dataset(parent_dir : str, phase_image_stack, segmentations, 
 
     '''
     
-    train_cutoff = labeled_data_frame[labeled_data_frame.shape[0] // (10/7), -3]
-    val_cutoff = labeled_data_frame[- labeled_data_frame.shape[0] // 10, -3]
+    train_cutoff = labeled_data_frame[-int(labeled_data_frame.shape[0] // (10/7)), -3]
+    val_cutoff = labeled_data_frame[int(labeled_data_frame.shape[0] // 10), -3]
 
     main_path = os.path.join(parent_dir, f'{name}')
     os.mkdir(main_path)       
@@ -44,9 +44,9 @@ def write_coco_conv_dataset(parent_dir : str, phase_image_stack, segmentations, 
     
 
     for j in range(labeled_data_frame.shape[0]):
-        if labeled_data_frame[j, -3] <= train_cutoff:
+        if labeled_data_frame[j, -3] >= train_cutoff:
             os.chdir(os.path.join(train_path, 'annotations'))
-        elif labeled_data_frame[j, -3] >= val_cutoff:
+        elif labeled_data_frame[j, -3] <= val_cutoff:
             os.chdir(os.path.join(val_path, 'annotations'))
         else:
             os.chdir(os.path.join(test_path, 'annotations'))
@@ -72,9 +72,9 @@ def write_coco_conv_dataset(parent_dir : str, phase_image_stack, segmentations, 
     
 
     for k in range(int(max(labeled_data_frame[:, -3]))):
-        if k <= train_cutoff:
+        if k >= train_cutoff:
             os.chdir(os.path.join(train_path, 'images'))
-        elif k >= val_cutoff:
+        elif k <= val_cutoff:
             os.chdir(os.path.join(val_path, 'images'))
         else:
             os.chdir(os.path.join(test_path, 'images'))

@@ -336,17 +336,20 @@ def get_model(cellaap_widget):
 
     url_registry = {
         "HeLa": "doi:10.5281/zenodo.11387359",
-        "HeLa_former": "doi:10.5281/zenodo.11951629"
+        "HeLaViT": "doi:10.5281/zenodo.11951629",
+        "HeLaViT(focal)": "doi:10.5281/zenodo.12206896"
                     }
 
     weights_registry = {
         "HeLa": ("model_0004999.pth", "md5:8cccf01917e4f04e4cfeda0878bc1f8a"),
-        "HeLa_former": ("model_0008399.pth", "md5:9dd789fab740d976c27f9d179128629d")
+        "HeLaViT": ("model_0008399.pth", "md5:9dd789fab740d976c27f9d179128629d"),
+        "HeLaViT(focal)": ("model_0014699.pth", "md5:36fd39cf3b053d9e540403fb0e9ca2c7")
     }
 
     configs_registry = {
         "HeLa": ("config.yaml", "md5:cf1532e9bc0ed07285554b1e28f942de", 'yacs'),
-        "HeLa_former": ("config.yml", "md5:0d2c6dd677ff7bcda80e0e297c1b6766" , 'lazy')
+        "HeLaViT": ("config.yml", "md5:0d2c6dd677ff7bcda80e0e297c1b6766" , 'lazy'),
+        "HeLaViT(focal)": ("vitb_bin_focal.yaml", "md5:a0d3a54ef2c67d1a09dc5dde3d603b1c", 'lazy')
         }
 
     model = pooch.create(

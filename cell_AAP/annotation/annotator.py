@@ -138,7 +138,7 @@ class Annotator:
                 "the method, crop(), must be called before the method gen_df()"
             )
         try:
-            assert isinstance(self.conifgs.propslist, list)
+            assert isinstance(self.configs.propslist, list)
         except Exception as error:
             raise AssertionError("props_list must be of type 'list'") from error
         try:
