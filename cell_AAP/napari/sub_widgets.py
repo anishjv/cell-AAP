@@ -1,5 +1,6 @@
 from __future__ import annotations
 from qtpy import QtWidgets
+from typing import Union
 
 
 def create_file_selector_widgets() -> dict[str, QtWidgets.QWidget]:
@@ -10,13 +11,17 @@ def create_file_selector_widgets() -> dict[str, QtWidgets.QWidget]:
         widgets: dict
             - image_selector: QtWidgets.QPushButton
             - path_selector: QtWidgets.QPushButtons (These push buttons connect to a function that creates an instance of QtWidgets.QFileDialog)
-            - save_selector: QtWidgets.QCheckBox
     """
 
     image_selector = QtWidgets.QPushButton("Select Image")
     image_selector.setToolTip("Select an image to ultimately run inference on")
 
     widgets = {"image_selector": image_selector}
+
+    display_button = QtWidgets.QPushButton("Display Image")
+    display_button.setToolTip("Display selected image")
+
+    widgets["display_button"] = display_button
 
     path_selector = QtWidgets.QPushButton("Select Directory")
     path_selector.setToolTip(
@@ -25,12 +30,39 @@ def create_file_selector_widgets() -> dict[str, QtWidgets.QWidget]:
 
     widgets["path_selector"] = path_selector
 
-    save_selector = QtWidgets.QPushButton("Save Inference")
+    return widgets
+
+
+def create_save_widgets() -> tuple[dict[str, QtWidgets.QWidget], dict[str, tuple[str, QtWidgets.QWidget]]]:
+    """
+    Creates Inference Saving Widgets
+    ------------------------------
+    RETURNS:
+        widgets: dict
+            - save_selector: QtWidgets.QPushButton
+            - save_combo_box: QtWidgets.QPushButton
+    """
+
+    analyze_check_box = QtWidgets.QCheckBox('Analyze')
+    analyze_check_box.setToolTip('Check to perform analysis when saving inference results, requires intensity image')
+    widgets = {'analyze_check_box': analyze_check_box}
+
+    save_combo_box = QtWidgets.QComboBox()
+    widgets['save_combo_box'] =  save_combo_box
+
+    interframe_duration = QtWidgets.QSpinBox()
+    interframe_duration.setRange(0, 100)
+    interframe_duration.setValue(10)
+    interframe_duration.setStepType(QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType)
+    interframe_duration.setToolTip("Time between frames of the movie for analysis, in any units ")
+    named_widgets = {'interframe_duration': ('Interframe Duration', interframe_duration)}
+
+    save_selector = QtWidgets.QPushButton("Save/Analyze")
     save_selector.setToolTip("Click to save the inference results")
 
-    widgets["save_selector"] = save_selector
+    widgets['save_selector'] = save_selector
 
-    return widgets
+    return widgets, named_widgets
 
 
 def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
@@ -47,7 +79,7 @@ def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
 
     model_selector = QtWidgets.QComboBox()
     model_selector.addItem("HeLa")
-    model_selector.addItem('HeLa_former')
+    model_selector.addItem('HeLaViT')
     widgets = {"model_selector": ("Select Model", model_selector)}
 
     thresholder = QtWidgets.QDoubleSpinBox()
@@ -66,7 +98,7 @@ def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
 
     widgets["confluency_est"] = ("Number of Cells (Approx.)", confluency_est)
 
-    set_configs = QtWidgets.QPushButton("Push")
+    set_configs = QtWidgets.QPushButton("Push Configurations")
     set_configs.setToolTip("Set Configurations")
 
     widgets["set_configs"] = ("Set Configurations", set_configs)
@@ -74,7 +106,7 @@ def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
     return widgets
 
 
-def create_disp_inf_widgets() -> dict[str, QtWidgets.QWidget]:
+def create_inf_widgets() -> dict[str, QtWidgets.QWidget]:
     """
     Creates Display and Inference Widgets
     ------------------------------
@@ -90,11 +122,6 @@ def create_disp_inf_widgets() -> dict[str, QtWidgets.QWidget]:
     inference_button.setToolTip("Run Inference")
 
     widgets = {"inference_button": inference_button}
-
-    display_button = QtWidgets.QPushButton("Display")
-    display_button.setToolTip("Display selected image")
-
-    widgets["display_button"] = display_button
 
     pbar = QtWidgets.QProgressBar()
     widgets["progress_bar"] = pbar

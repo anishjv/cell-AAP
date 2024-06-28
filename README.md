@@ -31,7 +31,7 @@ If a conda distribution has been installed:
 
 3. Then install cell-AAP from PyPi
 
-        pip install cell-AAP==0.0.3
+        pip install cell-AAP --upgrade
 
 4. Finally detectron2 must be built from source, atop cell-AAP
     
@@ -65,6 +65,15 @@ Note: Finding the optimal set of parameters requires some trial and error, to as
 | **Dropping M-phase**       | Confidence $\Downarrow$ <br> Number of Cells $\Uparrow$ | Confidence $\Downarrow$ <br> Number of cells $\Downarrow$ |
 | **Missclasifying M-phase** | Confidence $\Uparrow$ <br> Number of Cells $\Uparrow$   | Confidence $\Uparrow$ <br> Number of Cells $\Downarrow$   |
 
+
+# Intepreting Results 
+
+Once inference is complete the following colors indicate class prediction
+- Red: Non-mitotic
+- Blue: Mitotic
+- Purple: Interclass double prediction
+
+Note: Interclass double predictions are often early prophase cells that the network is not "confident" in, to mitigate such predictions increase the minimum confidence threshold. This will typically result in most double predictions regressing to the Non-mitotic class. 
 
 
 
