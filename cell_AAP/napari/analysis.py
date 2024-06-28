@@ -17,6 +17,15 @@ def track(
     config_file: Optional[str] = datasets.cell_config(),
     features: Optional[list[str]] = None,
 ):
+    """
+    Utilizes btrack to track cells through time, assigns class_id labels to each track, 0: non-mitotic, 1: mitotic
+    --------------------------------------------------------------------------------------------------------------
+    INPUTS:
+        instance_movie: np.ndarray,
+        intensity_movie: np.ndarray,
+        config_file: str,
+        features: list
+    """
 
     if features == None:
         features = [
@@ -203,6 +212,14 @@ def analyze(
         instance_movie: np.ndarray,
         interframe_duration: float,
     ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Composite function that facillitates the joint running of
+            - time_in_mitosis()
+            - cell_intensity()
+            - mitotic_intensity()
+
+        See docstrings of aforemtioned functions for inputs and outputs
+        """
 
         num_timepoints = instance_movie.shape[0]
         state_matrix, state_duration_vec, avg_time_in_mitosis = time_in_mitosis(

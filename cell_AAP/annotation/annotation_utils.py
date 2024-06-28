@@ -581,6 +581,15 @@ def write_clusters(
 
 
 def square_reshape(img: np.ndarray, desired_shape: tuple) -> np.ndarray:
+    """"
+    Reshapes a square image
+    -----------------------
+    INPUTS:
+        image: np.ndarray
+        desired_shape: tuple
+    OUTPUTS:
+        image: np.ndarray
+    """
 
     if img.shape[0] < desired_shape[0]:
         qdiff = (2048 - img.shape[0]) // 4
