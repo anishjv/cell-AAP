@@ -12,7 +12,9 @@ class cellAAPWidget(QtWidgets.QScrollArea):
     def __getitem__(self, key: str):
         return self._widgets[key]
 
-    def __init__(self, napari_viewer: Viewer, cfg, batch: Optional[bool] = False) -> None:
+    def __init__(
+        self, napari_viewer: Viewer, cfg, batch: Optional[bool] = False
+    ) -> None:
         """Instantiates the primary widget in napari.
 
         Args:
@@ -124,24 +126,29 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         tab.setLayout(layout)
         self._tabs.addTab(tab, "\N{GEAR}" + " Inference")
 
-
     def _add_batch_widgets(self):
+        "Adds batch_widgets which are the output of sub_widgets.create_batch_widgets. The aforementioned function outputs -> dict[str: QtWidgets.QWidget]"
 
         batch_widgets = sub_widgets.create_batch_widgets()
         self._widgets.update(batch_widgets)
 
         layout = QtWidgets.QGridLayout()
-        layout.addWidget(batch_widgets["full_spectrum_file_list"], 0, 0, 2, 2, Qt.AlignCenter)
-        layout.addWidget(batch_widgets["flouro_file_list"], 1, 0, 2, 2, Qt.AlignCenter)
+        layout.addWidget(
+            batch_widgets["full_spectrum_file_list"], 0, 0, 1, 2, Qt.AlignLeft
+        )
+        batch_widgets.pop("full_spectrum_file_list")
+        layout.addWidget(batch_widgets["flouro_file_list"], 0, 1, 1, 2, Qt.AlignRight)
+        batch_widgets.pop("flouro_file_list")
         for i, widget in enumerate(batch_widgets.values()):
-            layout.addWidget(widget, i, 2, 1, 1, Qt.AlignCenter)
+            print(i)
+            layout.addWidget(widget, 1, i, 1, 1, Qt.AlignCenter)
 
         widget_holder = QtWidgets.QGroupBox("Batch Worker")
         widget_holder.setLayout(layout)
-        self._main_layout.addWidget(widget_holder, stretch=0)
-
+        self._main_layout.addWidget(widget_holder)
 
     def _add_naming_widgets(self):
+        "Adds batch_widgets which are the output of sub_widgets.create_batch_widgets. The aforementioned function outputs -> dict[str: tuple[str, QtWidgets.QWidget]]"
 
         naming_widgets = sub_widgets.create_naming_convention_widgets()
         self._widgets.update({key: value[1] for key, value in naming_widgets.items()})

@@ -13,19 +13,21 @@ import napari.utils.notifications
 from typing import Optional
 
 
-def image_select(cellaap_widget: ui.cellAAPWidget, wavelength: str, pop: Optional[bool] = True):
+def image_select(
+    cellaap_widget: ui.cellAAPWidget, wavelength: str, pop: Optional[bool] = True
+):
     """
     Returns the path selected in the image selector box and the array corresponding the to path
     -------------------------------------------------------------------------------------------
     """
-    if wavelength == 'full_spectrum':
+    if wavelength == "full_spectrum":
         file = cellaap_widget.full_spectrum_files[0]
         if pop:
-             cellaap_widget.full_spectrum_files.pop(0)
+            cellaap_widget.full_spectrum_files.pop(0)
     else:
         file = cellaap_widget.flouro_files[0]
         if pop:
-             cellaap_widget.flouro_files.pop(0)
+            cellaap_widget.flouro_files.pop(0)
 
     if (
         re.search(
@@ -49,7 +51,9 @@ def display(cellaap_widget: ui.cellAAPWidget):
         cellaap_widget: instance of ui.cellAAPWidget()
     """
     try:
-        name, layer_data = image_select(cellaap_widget, wavelength='full_spectrum', pop = False)
+        name, layer_data = image_select(
+            cellaap_widget, wavelength="full_spectrum", pop=False
+        )
     except AttributeError:
         napari.utils.notifications.show_error("No Image has been selected")
         return
@@ -58,7 +62,7 @@ def display(cellaap_widget: ui.cellAAPWidget):
     cellaap_widget.viewer.add_image(layer_data, name=name)
 
 
-def grab_file(cellaap_widget: ui.cellAAPWidget, wavelength : str):
+def grab_file(cellaap_widget: ui.cellAAPWidget, wavelength: str):
     """
     Initiates a QtWidget.QFileDialog instance and grabs a file
     -----------------------------------------------------------
@@ -73,7 +77,7 @@ def grab_file(cellaap_widget: ui.cellAAPWidget, wavelength : str):
         filter=file_filter,
     )
 
-    if wavelength == 'full_spectrum':
+    if wavelength == "full_spectrum":
         cellaap_widget.full_spectrum_files = file_names
 
     else:
@@ -108,7 +112,7 @@ def grab_directory(cellaap_widget):
 
 def save(cellaap_widget):
     """
-    Saves a given napari layer
+    Saves and analyzes an inference result
     """
 
     try:
@@ -138,15 +142,20 @@ def save(cellaap_widget):
     if cellaap_widget.analyze_check_box.isChecked():
         instance_movie = np.asarray(inference_result["instance_movie"])
         try:
-            intensity_movie_path, intensity_movie = image_select(cellaap_widget, wavelength='flourescent')
+            intensity_movie_path, intensity_movie = image_select(
+                cellaap_widget, wavelength="flourescent"
+            )
         except AttributeError:
-            napari.utils.notifications.show_error("A Flourescence image has not been selected")
+            napari.utils.notifications.show_error(
+                "A Flourescence image has not been selected"
+            )
             return
 
         intensity_movie = intensity_movie[
             cellaap_widget.range_slider.value()[
                 0
-            ] : cellaap_widget.range_slider.value()[1] + 1
+            ] : cellaap_widget.range_slider.value()[1]
+            + 1
         ]
         tracks, data, properties, graph, cfg = analysis.track(
             instance_movie, intensity_movie
@@ -231,12 +240,12 @@ def save(cellaap_widget):
         os.path.join(inference_folder_path, "centroids.json"), orient="records"
     )
 
-#for next three functions, infer wavelength from file_list_toggle
 
-def add(cellaap_widget : ui.cellAAPWidget):
+def add(cellaap_widget: ui.cellAAPWidget):
+    "Adds a movie to the batch worker"
 
     grab_file(cellaap_widget, wavelength=cellaap_widget.batch_list_wavelength)
-    if cellaap_widget.batch_list_wavelength == 'full_spectrum':
+    if cellaap_widget.batch_list_wavelength == "full_spectrum":
         for file in cellaap_widget.full_spectrum_files:
             cellaap_widget.full_spectrum_file_list.addItem(file)
     else:
@@ -245,6 +254,7 @@ def add(cellaap_widget : ui.cellAAPWidget):
 
 
 def remove(cellaap_widget: ui.cellAAPWidget):
+    "Removes a movie from the batch worker"
 
     if cellaap_widget.batch_list_wavelength == "full_spectrum":
         current_row = cellaap_widget.full_spectrum_file_list.currentRow()
@@ -261,19 +271,24 @@ def remove(cellaap_widget: ui.cellAAPWidget):
 
 
 def clear(cellaap_widget: ui.cellAAPWidget):
+    "Clears the batchworker of all movies"
 
     if cellaap_widget.batch_list_wavelength == "full_spectrum":
         cellaap_widget.full_spectrum_file_list.clear()
+        cellaap_widget.full_spectrum_files = []
     else:
         cellaap_widget.flouro_file_list.clear()
-
+        cellaap_widget.flouro_files = []
 
 
 def toggle_wavelength(cellaap_widget: ui.cellAAPWidget):
+    "Toggles between adding movies to the fulll-spectrum file holder and flourescent file holder"
 
     if cellaap_widget.batch_list_wavelength == "full_spectrum":
         cellaap_widget.batch_list_wavelength = "flourescence"
     else:
         cellaap_widget.batch_list_wavelength = "full_spectrum"
 
-    napari.utils.notifications.show_info(f"{cellaap_widget.batch_list_wavelength} file list is selected for editing")
+    napari.utils.notifications.show_info(
+        f"{cellaap_widget.batch_list_wavelength} file list is selected for editing"
+    )

@@ -6,21 +6,46 @@ import matplotlib.pyplot as plt
 
 
 def read_excel(path: str, sheet_name: str | list[str]) -> pd.DataFrame:
+    '''
+    Reads an excel file into a pandas dataframe
+    ---------------------------------------------
+    INPUTS:
+        path: str
+        sheet_name: str | list[str]
+    OUTPUTS:
+        df: pd.DataFrame
+    '''
 
     df = pd.read_excel(path, sheet_name=sheet_name)
-
     return df
+
 
 
 def time_in_mitosis(
     df: pd.DataFrame,
     x: str,
     y: str,
-    bin: bool,
+    bin: Optional[bool] = False,
     alt_xlabel: Optional[str] = None,
     alt_ylabel: Optional[str] = None,
     title: Optional[str] = None,
 ):
+
+    """
+    Takes in a pandas dataframe along with two variables, x: independent, y: dependent and creates a scatterplot
+    -------------------------------------------------------------------------------------------------------------
+    INPUTS:
+        df: pd.DataFrame
+        x: str, must be a coloumn of df
+        y: str, must be a coloumn of df
+        bin: bool, whether or not to plot binned averages
+        alt_xlabel: str
+        alt_ylabel: str
+        title: str
+    OUTPUTS:
+        fig: matplotlib.pyplot.plt.subplot object
+
+    """
 
     sns.set_style("white")
     fig, ax = plt.subplots(1, 1, figsize=(20, 15), sharex=True, sharey=True)

@@ -150,7 +150,18 @@ def create_inf_widgets() -> dict[str, QtWidgets.QWidget]:
     return widgets
 
 
-def create_batch_widgets():
+def create_batch_widgets() -> dict[str, QtWidgets.QWidget]:
+    """
+    Creates Batch Worker Widgets
+    ------------------------------
+    RETURNS:
+        widgets: dict
+            - full_spectrum_file_list: QtWidgets.QListWidget
+            - flouro_file_list: QtWidgets.QListWidget
+            - add_button: QtWidgets.QPushButton
+            - remove_button: QtWigets.QPushButton
+            - file_list_toggle: QtWidgets.QPushButton
+    """
 
     full_spectrum_file_list = QtWidgets.QListWidget()
     widgets = {"full_spectrum_file_list": full_spectrum_file_list}
@@ -170,7 +181,15 @@ def create_batch_widgets():
     return widgets
 
 
-def create_naming_convention_widgets():
+def create_naming_convention_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
+    """
+    Creates Naming Convention Widgets
+    ------------------------------
+    RETURNS:
+        widgets: dict
+            - full_spec_format: QtWidgets.QLineEdit
+            - flouro_format: QtWidgets.QLineEdit
+    """
 
     full_spec_format = QtWidgets.QLineEdit()
     widgets = {"full_spec_format": ("Full Spectrum Naming Convention", full_spec_format)}

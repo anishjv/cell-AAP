@@ -56,7 +56,9 @@ if not logger.handlers:
 def create_cellAAP_widget(batch: Optional[bool] = False) -> ui.cellAAPWidget:
     "Creates instance of ui.cellAAPWidget and sets callbacks"
 
-    cellaap_widget = ui.cellAAPWidget(napari_viewer=napari.current_viewer(), cfg=None, batch = batch)
+    cellaap_widget = ui.cellAAPWidget(
+        napari_viewer=napari.current_viewer(), cfg=None, batch=batch
+    )
 
     cellaap_widget.inference_button.clicked.connect(
         lambda: run_inference(cellaap_widget)
@@ -88,7 +90,9 @@ def create_cellAAP_widget(batch: Optional[bool] = False) -> ui.cellAAPWidget:
 def create_batch_widget(batch: Optional[bool] = True) -> ui.cellAAPWidget:
     "Creates instance of ui.cellAAPWidget and sets callbacks"
 
-    cellaap_widget = ui.cellAAPWidget(napari_viewer=napari.current_viewer(), cfg=None, batch = batch)
+    cellaap_widget = ui.cellAAPWidget(
+        napari_viewer=napari.current_viewer(), cfg=None, batch=batch
+    )
 
     cellaap_widget.inference_button.clicked.connect(
         lambda: batch_inference(cellaap_widget)
@@ -96,21 +100,17 @@ def create_batch_widget(batch: Optional[bool] = True) -> ui.cellAAPWidget:
 
     cellaap_widget.set_configs.clicked.connect(lambda: configure(cellaap_widget))
 
-    cellaap_widget.add_button.clicked.connect(
-        lambda: fileio.add(cellaap_widget)
-    )
+    cellaap_widget.add_button.clicked.connect(lambda: fileio.add(cellaap_widget))
 
-    cellaap_widget.remove_button.clicked.connect(
-        lambda: fileio.remove(cellaap_widget)
-    )
+    cellaap_widget.remove_button.clicked.connect(lambda: fileio.remove(cellaap_widget))
 
     cellaap_widget.file_list_toggle.clicked.connect(
         lambda: fileio.toggle_wavelength(cellaap_widget)
     )
 
     cellaap_widget.path_selector.clicked.connect(
-         lambda: fileio.grab_directory(cellaap_widget)
-     )
+        lambda: fileio.grab_directory(cellaap_widget)
+    )
 
     cellaap_widget.set_configs.clicked.connect(lambda: configure(cellaap_widget))
 
@@ -196,7 +196,8 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
         movie = []
         for frame in range(
             cellaap_widget.range_slider.value()[1]
-            - cellaap_widget.range_slider.value()[0] + 1
+            - cellaap_widget.range_slider.value()[0]
+            + 1
         ):
             prog_count += 1
             frame += cellaap_widget.range_slider.value()[0]
@@ -240,17 +241,19 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
         size=int(img.shape[1] / 200),
     )
 
-    already_cached = [cellaap_widget.save_combo_box.itemText(i) for i in range(cellaap_widget.save_combo_box.count())]
+    already_cached = [
+        cellaap_widget.save_combo_box.itemText(i)
+        for i in range(cellaap_widget.save_combo_box.count())
+    ]
     cache_entry_name = f"{name}_{model_name}_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}"
 
     if cache_entry_name in already_cached:
-        only_cache_entry = [entry for _, entry in enumerate(already_cached) if entry == cache_entry_name]
+        only_cache_entry = [
+            entry for _, entry in enumerate(already_cached) if entry == cache_entry_name
+        ]
         cache_entry_name += f"_{len(only_cache_entry)}"
 
-    cellaap_widget.save_combo_box.insertItem(
-        0,
-        cache_entry_name
-    )
+    cellaap_widget.save_combo_box.insertItem(0, cache_entry_name)
     cellaap_widget.save_combo_box.setCurrentIndex(0)
 
     cellaap_widget.inference_cache.append(
@@ -264,21 +267,36 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
 
 
 def batch_inference(cellaap_widget: ui.cellAAPWidget):
+    """
+    Runs inference on group of movies through the batch worker
+    ----------------------------------------------------------
+    Inputs:
+        cellapp_widget: instance of ui.cellAAPWidget()
+    """
 
     # sort files in cellaapwidget.file_list into tuples of (full_spec, flouro)
     full_spec_naming_conv = cellaap_widget.full_spec_format.text()
     flouro_naming_conv = cellaap_widget.flouro_format.text()
 
-    full_spec_file_prefixes = [file.split(full_spec_naming_conv)[0] for file in cellaap_widget.full_spectrum_files]
-    flouro_file_prefixes = [file.split(flouro_naming_conv)[0] for file in cellaap_widget.flouro_files]
+    full_spec_file_prefixes = [
+        file.split(full_spec_naming_conv)[0]
+        for file in cellaap_widget.full_spectrum_files
+    ]
+    flouro_file_prefixes = [
+        file.split(flouro_naming_conv)[0] for file in cellaap_widget.flouro_files
+    ]
     flouro_file_suffix = cellaap_widget.flouro_files[0].split(flouro_naming_conv)[1]
 
     try:
         assert sorted(full_spec_file_prefixes) == sorted(flouro_file_prefixes)
     except AssertionError:
-        raise Exception("List of full_spectrum movies does not correspond with list of flourescent movies")
+        raise Exception(
+            "List of full_spectrum movies does not correspond with list of flourescent movies"
+        )
 
-    cellaap_widget.flouro_files = [prefix + 'Cy5' + flouro_file_suffix for prefix in full_spec_file_prefixes]
+    cellaap_widget.flouro_files = [
+        prefix + "Cy5" + flouro_file_suffix for prefix in full_spec_file_prefixes
+    ]
     num_movie_pairs = len(cellaap_widget.full_spectrum_files)
 
     movie_tally = 0
@@ -286,6 +304,7 @@ def batch_inference(cellaap_widget: ui.cellAAPWidget):
         run_inference(cellaap_widget)
         fileio.save(cellaap_widget)
         movie_tally += 1
+
 
 def configure(cellaap_widget: ui.cellAAPWidget):
     """
@@ -367,22 +386,13 @@ def get_model(cellaap_widget):
     }
 
     weights_registry = {
-        "ResNet-1.8": (
-            "model_0004999.pth",
-            "md5:8cccf01917e4f04e4cfeda0878bc1f8a"
-        ),
-        "ViTb-1.8": (
-            "model_0008399.pth",
-            "md5:9dd789fab740d976c27f9d179128629d"
-        ),
+        "ResNet-1.8": ("model_0004999.pth", "md5:8cccf01917e4f04e4cfeda0878bc1f8a"),
+        "ViTb-1.8": ("model_0008399.pth", "md5:9dd789fab740d976c27f9d179128629d"),
         "ViTbFocal-1.8": (
             "model_0014699.pth",
             "md5:36fd39cf3b053d9e540403fb0e9ca2c7",
         ),
-        "ViTb-1.9": (
-            "model_0019574.pth",
-            "md5:0417118a914ad279c827faf6e6d8ddcb"
-        ),
+        "ViTb-1.9": ("model_0019574.pth", "md5:0417118a914ad279c827faf6e6d8ddcb"),
         "ViTlFocal-1.9": (
             "model_0034799.pth",
             "md5:a141bac9d6fedee1e898e464be4c42c9",
@@ -390,11 +400,7 @@ def get_model(cellaap_widget):
     }
 
     configs_registry = {
-        "ResNet-1.8": (
-            "config.yaml",
-            "md5:cf1532e9bc0ed07285554b1e28f942de",
-            "yacs"
-        ),
+        "ResNet-1.8": ("config.yaml", "md5:cf1532e9bc0ed07285554b1e28f942de", "yacs"),
         "ViTb-1.8": (
             "config.yml",
             "md5:0d2c6dd677ff7bcda80e0e297c1b6766",
@@ -414,7 +420,7 @@ def get_model(cellaap_widget):
             "vitl_focal_1.9.yaml",
             "md5:809bc09220a8dea515c58e2ddb3cfe77",
             "lazy",
-        )
+        ),
     }
 
     model = pooch.create(
