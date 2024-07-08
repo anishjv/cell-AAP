@@ -1,8 +1,8 @@
 import numpy as np
 import os
 from skimage import segmentation
-import btrack #type: ignore
-from btrack import datasets # type:ignore
+import btrack  # type: ignore
+from btrack import datasets  # type:ignore
 import pandas as pd
 from typing import Optional
 import tifffile as tiff
@@ -34,12 +34,14 @@ def track(
             "minor_axis_length",
             "orientation",
             "solidity",
-            "intensity_mean"
+            "intensity_mean",
         ]
 
     if intensity_movie.shape[1] != instance_movie.shape[1]:
         intensity_movie_binned = [
-            au.square_reshape(np.asarray(intensity_movie[i]), desired_shape= instance_movie.shape[1:])
+            au.square_reshape(
+                np.asarray(intensity_movie[i]), desired_shape=instance_movie.shape[1:]
+            )
             for i, _ in enumerate(intensity_movie)
         ]
 
@@ -54,20 +56,20 @@ def track(
     )
 
     for object in objects:
-        if object.properties['class_id'] % 2 == 0:
-            object.properties['class_id'] = 0
+        if object.properties["class_id"] % 2 == 0:
+            object.properties["class_id"] = 0
         else:
-            object.properties['class_id'] = 1
+            object.properties["class_id"] = 1
 
     with btrack.BayesianTracker() as tracker:
 
         tracker.configure(config_file)
-        tracker.max_search_radius = 50
+        tracker.max_search_radius = 25
         tracker.tracking_updates = ["MOTION", "VISUAL"]
         tracker.features = features
 
         tracker.append(objects)
-        tracker.volume = ((0, intensity_movie.shape[1]), (0, intensity_movie.shape[0]))
+        tracker.volume = ((0, intensity_movie.shape[1]), (0, intensity_movie.shape[2]))
         tracker.track(step_size=100)
         tracker.optimize()
 
@@ -88,8 +90,9 @@ def time_in_mitosis(
         tracks
         interframe_duration: float
     OUTPUTS:
-        avg_time_in_mitosis: int
+        state_matric: np.ndarray
         state_duration_vec: np.ndarray, indexed like "state_duration_vec[cell]"
+        avg_time_in_mitosis: int
     """
 
     state_matrix = []
@@ -117,14 +120,16 @@ def time_in_mitosis(
     return state_matrix, state_duration_vec, avg_time_in_mitosis
 
 
-def cell_intensity(tracks, time_points: int) -> np.ndarray:
+def cell_intensity(tracks, time_points: int) -> tuple[np.ndarray, np.ndarray]:
     """
     Takes in a tracks object from btrack and an interframe duration, returns a matrix containing the average intensity of each cell at each timepoint
     ---------------------------------------------------------------------------------------------------------------------------------------------------
     INPUTS:
-        tracks
+        tracks: btrack tracks object
+        time_points: int
     OUTPUTS:
         intensity_matric: np.ndarray, indexed like "intensity_matrix[cell, timepoint]"
+        avg_intensity_vec: np.ndarray
     """
     intensity_matrix = []
     for cell in tracks:
@@ -141,7 +146,10 @@ def cell_intensity(tracks, time_points: int) -> np.ndarray:
         np.flatnonzero(mask), np.flatnonzero(~mask), intensity_matrix[~mask]
     )
 
-    return intensity_matrix
+    avg_intensity_vec = np.sum(intensity_matrix, axis=1) / time_points
+
+    return intensity_matrix, avg_intensity_vec
+
 
 def mitotic_intensity(
     state_duration_vec: np.ndarray,
@@ -150,7 +158,7 @@ def mitotic_intensity(
     interframe_duration: float,
 ) -> np.ndarray:
     """
-    Takes the results of time_in_mitosis and cell_intensity and correlates the two, returning a vector containing the averga intensity of each cell during mitosis
+    Takes the results of time_in_mitosis and cell_intensity and correlates the two, returning a vector containing the average intensity of each cell during mitosis
     --------------------------------------------------------------------------------------------------------------------------------------------------------------
     INPUTS:
         state_duration_vec: np.ndarray
@@ -179,7 +187,13 @@ def mitotic_intensity(
 
     return mitotic_intensity_vec
 
-def write_output(data: list[np.ndarray], directory: str, names: list[str], columns: Optional[list] = None) -> None:
+
+def write_output(
+    data: list[np.ndarray],
+    directory: str,
+    names: list[str],
+    columns: Optional[list] = None,
+) -> None:
     """
     Writes analysis output to an excel file
     ---------------------------------------
@@ -197,37 +211,76 @@ def write_output(data: list[np.ndarray], directory: str, names: list[str], colum
             df = pd.DataFrame(array)
 
         else:
-            df = pd.DataFrame(
-                array, columns = columns[i]
-            )
+            df = pd.DataFrame(array, columns=columns[i])
         df_cache.append(df)
 
-    filename = os.path.join(directory, 'analysis.xlsx')
+    filename = os.path.join(directory, "analysis.xlsx")
     with pd.ExcelWriter(filename) as writer:
         [df.to_excel(writer, sheet_name=names[i]) for i, df in enumerate(df_cache)]
 
 
+def compile_tracking_coords(
+    tracks, state_duration_vec: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Compliles the inititation and termination of all tracks from a btrack tracks instance, requires a vector specifying whether or not each track was ever mitotic (class_id == 1)
+    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    INPUTS:
+        tracks: btrack tracking instance
+        state_duration_vec: np.ndarray, vector of shape == len(tracks) specifying whether or not each track was every a given class id
+    OUTPUTS:
+        init_vec: np.ndarray,  vector containing (x_i, y_i) where i stands for initial
+        term_vec: np.ndarray, vector containing (x_f, y_f) where f stands for final
+        init_vec_mitotic: np.ndarray, init_vec trimmed to only include mitotic cells
+        term_vec_mitotic, np.ndarray, term_vec trimmed to only include mitotic cells
+    """
+
+    init_vec = [[cell.x[0], cell.y[0]] for cell in tracks]
+    term_vec = [[cell.x[-1], cell.y[-1]] for cell in tracks]
+    init_vec = np.asarray(init_vec)
+    term_vec = np.asarray(term_vec)
+
+    double_duration_vec = np.concatenate(
+        ([state_duration_vec], [state_duration_vec]), axis=0
+    )
+    mitotic_vec_mask = double_duration_vec.T > 0
+
+    init_vec_mitotic = init_vec[mitotic_vec_mask[:, 0] == True, :]
+    term_vec_mitotic = term_vec[mitotic_vec_mask[:, 0] == True, :]
+
+    return init_vec, term_vec, init_vec_mitotic, term_vec_mitotic
+
+
 def analyze(
-        tracks,
-        instance_movie: np.ndarray,
-        interframe_duration: float,
-    ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Composite function that facillitates the joint running of
-            - time_in_mitosis()
-            - cell_intensity()
-            - mitotic_intensity()
+    tracks,
+    instance_movie: np.ndarray,
+    interframe_duration: float,
+) -> tuple[np.ndarray, int, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Composite function that facillitates the joint running of
+        - time_in_mitosis()
+        - cell_intensity()
+        - mitotic_intensity()
 
-        See docstrings of aforemtioned functions for inputs and outputs
-        """
+    See docstrings of aforemtioned functions for inputs and outputs
+    """
 
-        num_timepoints = instance_movie.shape[0]
-        state_matrix, state_duration_vec, avg_time_in_mitosis = time_in_mitosis(
-            tracks, interframe_duration, num_timepoints
-        )
-        intensity_matrix = cell_intensity(tracks, num_timepoints)
-        mitotic_intensity_vec = mitotic_intensity(
-            state_duration_vec, state_matrix, intensity_matrix, interframe_duration
-        )
+    analysis_cache = []
+    num_timepoints = instance_movie.shape[0]
+    state_matrix, state_duration_vec, avg_time_in_mitosis = time_in_mitosis(
+        tracks, interframe_duration, num_timepoints
+    )
 
-        return state_duration_vec, avg_time_in_mitosis, intensity_matrix, mitotic_intensity_vec, state_matrix
+    intensity_matrix, avg_intensity_vec = cell_intensity(tracks, num_timepoints)
+    mitotic_intensity_vec = mitotic_intensity(
+        state_duration_vec, state_matrix, intensity_matrix, interframe_duration
+    )
+
+    return (
+        state_duration_vec,
+        avg_time_in_mitosis,
+        intensity_matrix,
+        avg_intensity_vec,
+        mitotic_intensity_vec,
+        state_matrix,
+    )

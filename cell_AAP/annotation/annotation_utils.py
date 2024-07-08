@@ -287,7 +287,7 @@ def crop_regions_predict(
     phase_image_stack,
     predictor,
     threshold_division : float,
-    sigma : float,
+    sigma : int,
     erosionstruct,
     tophatstruct,
     box_size:tuple,
@@ -437,7 +437,7 @@ def clean_regions(
     frame_count: int,
     cell_count: np.ndarray,
     threshold_division: float,
-    sigma: float,
+    sigma: int,
     threshold_type: str = "single",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -603,3 +603,21 @@ def square_reshape(img: np.ndarray, desired_shape: tuple) -> np.ndarray:
         img = binImage(img, desired_shape)
 
     return img
+
+
+    def mask_iou(mask1, mask2):
+        """
+        Computes the itersection over union of two binary masks
+        -------------------------------------------------------
+        INPUTS:
+            mask1: np.ndarray[bool]
+            mask2: np.ndarry[bool]
+        OUTPUTS:
+            iou: float
+
+        """
+        mask1_area = np.count_nonzero(mask1 == 1)
+        mask2_area = np.count_nonzero(mask2 == 1)
+        intersection = np.count_nonzero(np.logical_and( mask1==1,  mask2==1 ))
+        iou = intersection/(mask1_area+mask2_area-intersection)
+        return iou

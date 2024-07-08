@@ -1,16 +1,18 @@
 from __future__ import annotations
 from napari.viewer import Viewer
 from qtpy import QtWidgets
+from qtpy.QtCore import Qt
+from typing import Optional
 from cell_AAP.napari import sub_widgets  # type: ignore
 
 
 class cellAAPWidget(QtWidgets.QScrollArea):
     "cellAAPWidget GUI Class"
 
-    def __getitem__(self, key: str) -> QtWidgets.QWidget:
+    def __getitem__(self, key: str):
         return self._widgets[key]
 
-    def __init__(self, napari_viewer: Viewer, cfg) -> None:
+    def __init__(self, napari_viewer: Viewer, cfg, batch: Optional[bool] = False) -> None:
         """Instantiates the primary widget in napari.
 
         Args:
@@ -22,8 +24,12 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         self.cfg = cfg
         self.configured = False
         self.inference_cache = []
+        self.batch = batch
 
         self.setWidgetResizable(True)  # noqa: FBT003
+        self.full_spectrum_files = []
+        self.flouro_files = []
+        self.batch_list_wavelength = "full_spectrum"
 
         self._main_layout = QtWidgets.QVBoxLayout()
         self._main_widget = QtWidgets.QWidget()
@@ -34,9 +40,14 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         # Create widgets and add to layout
         self._widgets = {}
         self._add_inf_widgets()
+        if batch:
+            self._add_batch_widgets()
+            self._add_naming_widgets()
+        else:
+            self._add_file_widgets()
         self._add_config_widgets()
-        self._add_file_widgets()
         self._add_save_widgets()
+
         self._main_layout.addWidget(self._tabs, stretch=0)
 
         for name, widget in self._widgets.items():
@@ -47,7 +58,7 @@ class cellAAPWidget(QtWidgets.QScrollArea):
 
         disp_inf_widgets = sub_widgets.create_inf_widgets()
         self._widgets.update(disp_inf_widgets)
-        widget_holder = QtWidgets.QGroupBox("cell-AAP")
+        widget_holder = QtWidgets.QGroupBox("Inference")
         layout = QtWidgets.QFormLayout()
         for widget in disp_inf_widgets.values():
             layout.addRow(widget)
@@ -55,12 +66,14 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         widget_holder.setLayout(layout)
         self._main_layout.addWidget(widget_holder, stretch=0)
 
-
     def _add_save_widgets(self):
         "Adds save_widgets with are the outputs of sub_widgets.create_save_widgets."
 
         save_widgets, named_widget = sub_widgets.create_save_widgets()
         layout = QtWidgets.QFormLayout()
+
+        if self.batch:
+            save_widgets.pop("save_selector")
 
         value = list(named_widget.items())
         attr_name = value[0][0]
@@ -77,7 +90,7 @@ class cellAAPWidget(QtWidgets.QScrollArea):
 
         tab = QtWidgets.QWidget()
         tab.setLayout(layout)
-        self._tabs.addTab(tab, 'Save/Analyze')
+        self._tabs.addTab(tab, "\N{GEAR}" + " Analysis")
 
     def _add_file_widgets(self):
         "Adds file_widgets which are the output of sub_widgets.create_file_selector_widgets. The aforementioned function outputs -> dict[str: QtWidgets.QWidget]"
@@ -89,9 +102,9 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         for widget in file_widgets.values():
             layout.addRow(widget)
 
-        tab = QtWidgets.QWidget()
-        tab.setLayout(layout)
-        self._tabs.addTab(tab, "FileIO")
+        widget_holder = QtWidgets.QGroupBox("Movie Selector")
+        widget_holder.setLayout(layout)
+        self._main_layout.addWidget(widget_holder, stretch=0)
 
     def _add_config_widgets(self):
         "Adds config_widgets which are the output of sub_widgets.create_config_widgets. The aforementioned function outputs -> dict[str: tuple[str, QtWidgets.QWidget]]"
@@ -105,6 +118,42 @@ class cellAAPWidget(QtWidgets.QScrollArea):
             label_widget.setToolTip(widget.toolTip())
             layout.addRow(label_widget, widget)
 
+        layout.setLabelAlignment(Qt.AlignLeft)
+
         tab = QtWidgets.QWidget()
         tab.setLayout(layout)
-        self._tabs.addTab(tab, "Configs")
+        self._tabs.addTab(tab, "\N{GEAR}" + " Inference")
+
+
+    def _add_batch_widgets(self):
+
+        batch_widgets = sub_widgets.create_batch_widgets()
+        self._widgets.update(batch_widgets)
+
+        layout = QtWidgets.QGridLayout()
+        layout.addWidget(batch_widgets["full_spectrum_file_list"], 0, 0, 2, 2, Qt.AlignCenter)
+        layout.addWidget(batch_widgets["flouro_file_list"], 1, 0, 2, 2, Qt.AlignCenter)
+        for i, widget in enumerate(batch_widgets.values()):
+            layout.addWidget(widget, i, 2, 1, 1, Qt.AlignCenter)
+
+        widget_holder = QtWidgets.QGroupBox("Batch Worker")
+        widget_holder.setLayout(layout)
+        self._main_layout.addWidget(widget_holder, stretch=0)
+
+
+    def _add_naming_widgets(self):
+
+        naming_widgets = sub_widgets.create_naming_convention_widgets()
+        self._widgets.update({key: value[1] for key, value in naming_widgets.items()})
+
+        layout = QtWidgets.QFormLayout()
+        for label, widget in naming_widgets.values():
+            label_widget = QtWidgets.QLabel(label)
+            label_widget.setToolTip(widget.toolTip())
+            layout.addRow(label_widget, widget)
+
+        layout.setLabelAlignment(Qt.AlignLeft)
+
+        widget_holder = QtWidgets.QGroupBox("Wavelength Naming Conventions")
+        widget_holder.setLayout(layout)
+        self._main_layout.addWidget(widget_holder, stretch=0)

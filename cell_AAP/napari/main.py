@@ -1,11 +1,12 @@
 from __future__ import annotations
 import logging
-
+import sys
 import napari
 import napari.utils.notifications
+from numpy.core.multiarray import empty_like
 import cell_AAP.napari.ui as ui  # type:ignore
 import cell_AAP.annotation.annotation_utils as au  # type:ignore
-import cell_AAP.napari.fileio as fileio #type: ignore
+import cell_AAP.napari.fileio as fileio  # type: ignore
 
 import numpy as np
 import cv2
@@ -14,18 +15,20 @@ import re
 import os
 import torch
 import skimage.measure
-from skimage.morphology import erosion, disk
+from skimage.morphology import binary_erosion, disk
 import pooch
 
-from detectron2.utils.logger import setup_logger
-from detectron2.engine import DefaultPredictor
-from detectron2.engine.defaults import create_ddp_model
-from detectron2.config import get_cfg
-from detectron2.checkpoint import DetectionCheckpointer
-from detectron2.config import LazyConfig, instantiate
-from qtpy import QtWidgets
+sys.path.insert(0, "/Users/whoisv/detectron2_focal/")
+from detectron2_loc.utils.logger import setup_logger
+from detectron2_loc.engine import DefaultPredictor
+from detectron2_loc.engine.defaults import create_ddp_model
+from detectron2_loc.config import get_cfg
+from detectron2_loc.checkpoint import DetectionCheckpointer
+from detectron2_loc.config import LazyConfig, instantiate
+from qtpy import QtWidgets, _warn_old_minor_version
 import timm
 from typing import Optional
+import itertools
 
 setup_logger()
 
@@ -50,10 +53,10 @@ if not logger.handlers:
     logger.setLevel(logging.DEBUG)
 
 
-def create_cellAAP_widget() -> ui.cellAAPWidget:
+def create_cellAAP_widget(batch: Optional[bool] = False) -> ui.cellAAPWidget:
     "Creates instance of ui.cellAAPWidget and sets callbacks"
 
-    cellaap_widget = ui.cellAAPWidget(napari_viewer=napari.current_viewer(), cfg=None)
+    cellaap_widget = ui.cellAAPWidget(napari_viewer=napari.current_viewer(), cfg=None, batch = batch)
 
     cellaap_widget.inference_button.clicked.connect(
         lambda: run_inference(cellaap_widget)
@@ -64,7 +67,11 @@ def create_cellAAP_widget() -> ui.cellAAPWidget:
     )
 
     cellaap_widget.image_selector.clicked.connect(
-        lambda: fileio.grab_file(cellaap_widget)
+        lambda: fileio.grab_file(cellaap_widget, wavelength="full_spectrum")
+    )
+
+    cellaap_widget.flourescent_image_selector.clicked.connect(
+        lambda: fileio.grab_file(cellaap_widget, wavelength="flourescent")
     )
 
     cellaap_widget.path_selector.clicked.connect(
@@ -78,89 +85,36 @@ def create_cellAAP_widget() -> ui.cellAAPWidget:
     return cellaap_widget
 
 
-def run_inference(cellaap_widget: ui.cellAAPWidget):
-    """
-    Runs inference on image returned by self.image_select(), saves inference result if save selector has been checked
-    ----------------------------------------------------------------------------------------------------------------
-    Inputs:
-        cellapp_widget: instance of ui.cellAAPWidget()
-    """
-    prog_count = 0
-    instance_movie = []
-    semantic_movie = []
-    points = ()
-    try:
-        name, im_array = fileio.image_select(cellaap_widget)
-        name = name.replace(".", "/").split("/")[-2]
-    except AttributeError:
-        napari.utils.notifications.show_error("No Image has been selected")
-        return
+def create_batch_widget(batch: Optional[bool] = True) -> ui.cellAAPWidget:
+    "Creates instance of ui.cellAAPWidget and sets callbacks"
 
-    try:
-        assert cellaap_widget.configured == True
-    except AssertionError:
-        napari.utils.notifications.show_error(
-            "You must configure the model before running inference"
-        )
-        return
+    cellaap_widget = ui.cellAAPWidget(napari_viewer=napari.current_viewer(), cfg=None, batch = batch)
 
-    cellaap_widget.progress_bar.setMaximum(im_array.shape[0])
-    if len(im_array.shape) == 3:
-        movie = []
-        for frame in range(im_array.shape[0]):
-            prog_count += 1
-            cellaap_widget.progress_bar.setValue(prog_count)
-            img = au.bw_to_rgb(im_array[frame].astype("float32"))
-            semantic_seg, instance_seg, centroids, img = inference(
-                cellaap_widget, img, frame
-            )
-            movie.append(img)
-            semantic_movie.append(semantic_seg.astype("uint8"))
-            instance_movie.append(instance_seg.astype("uint8"))
-            if len(centroids) != 0:
-                points += (centroids,)
-        cellaap_widget.viewer.add_image(np.asarray(movie)[:, :, :, 0], name=name)
-
-    elif len(im_array.shape) == 2:
-        prog_count += 1
-        cellaap_widget.progress_bar.setValue(prog_count)
-        img = au.bw_to_rgb(im_array.astype("float32"))
-        semantic_seg, instance_seg, centroids, img = inference(cellaap_widget, img)
-        semantic_movie.append(semantic_seg.astype("uint8"))
-        instance_movie.append(instance_seg.astype("uint8"))
-        if len(centroids) != 0:
-            points += (centroids,)
-        cellaap_widget.viewer.add_image(img[:, :, 0], name=name)
-
-    model_name = cellaap_widget.model_selector.currentText()
-    cellaap_widget.progress_bar.reset()
-
-    cellaap_widget.viewer.add_labels(
-        np.asarray(semantic_movie),
-        name=f"{name}_{model_name}_semantic_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}",
-        opacity=0.2,
+    cellaap_widget.inference_button.clicked.connect(
+        lambda: batch_inference(cellaap_widget)
     )
 
-    points_array = np.vstack(points)
-    cellaap_widget.viewer.add_points(
-        points_array,
-        ndim=points_array.shape[1],
-        name=f"{name}_{model_name}_centroids_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}",
-        size=int(img.shape[1] / 200),
+    cellaap_widget.set_configs.clicked.connect(lambda: configure(cellaap_widget))
+
+    cellaap_widget.add_button.clicked.connect(
+        lambda: fileio.add(cellaap_widget)
     )
 
-    cellaap_widget.save_combo_box.addItem(
-        f"{name}_{model_name}_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}"
+    cellaap_widget.remove_button.clicked.connect(
+        lambda: fileio.remove(cellaap_widget)
     )
 
-    cellaap_widget.inference_cache.append(
-        {
-            "name": f"{name}_{model_name}_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}",
-            "semantic_movie": semantic_movie,
-            "instance_movie": instance_movie,
-            "centroids": points_array,
-        }
+    cellaap_widget.file_list_toggle.clicked.connect(
+        lambda: fileio.toggle_wavelength(cellaap_widget)
     )
+
+    cellaap_widget.path_selector.clicked.connect(
+         lambda: fileio.grab_directory(cellaap_widget)
+     )
+
+    cellaap_widget.set_configs.clicked.connect(lambda: configure(cellaap_widget))
+
+    return cellaap_widget
 
 
 def inference(
@@ -207,6 +161,131 @@ def inference(
 
     return seg_fordisp, seg_fortracking, centroids, img
 
+
+def run_inference(cellaap_widget: ui.cellAAPWidget):
+    """
+    Runs inference on image returned by self.image_select(), saves inference result if save selector has been checked
+    ----------------------------------------------------------------------------------------------------------------
+    Inputs:
+        cellapp_widget: instance of ui.cellAAPWidget()
+    """
+    prog_count = 0
+    instance_movie = []
+    semantic_movie = []
+    points = ()
+
+    try:
+        name, im_array = fileio.image_select(cellaap_widget, wavelength="full_spectrum")
+        name = name.replace(".", "/").split("/")[-2]
+    except AttributeError:
+        napari.utils.notifications.show_error("No Image has been selected")
+        return
+
+    try:
+        assert cellaap_widget.configured == True
+    except AssertionError:
+        napari.utils.notifications.show_error(
+            "You must configure the model before running inference"
+        )
+        return
+
+    cellaap_widget.progress_bar.setMaximum(
+        cellaap_widget.range_slider.value()[1] - cellaap_widget.range_slider.value()[0]
+    )
+    if len(im_array.shape) == 3:
+        movie = []
+        for frame in range(
+            cellaap_widget.range_slider.value()[1]
+            - cellaap_widget.range_slider.value()[0] + 1
+        ):
+            prog_count += 1
+            frame += cellaap_widget.range_slider.value()[0]
+            cellaap_widget.progress_bar.setValue(prog_count)
+            img = au.bw_to_rgb(im_array[frame].astype("float32"))
+            semantic_seg, instance_seg, centroids, img = inference(
+                cellaap_widget, img, frame - cellaap_widget.range_slider.value()[0]
+            )
+            movie.append(img)
+            semantic_movie.append(semantic_seg.astype("uint8"))
+            instance_movie.append(instance_seg.astype("uint8"))
+            if len(centroids) != 0:
+                points += (centroids,)
+        cellaap_widget.viewer.add_image(np.asarray(movie)[:, :, :, 0], name=name)
+
+    elif len(im_array.shape) == 2:
+        prog_count += 1
+        cellaap_widget.progress_bar.setValue(prog_count)
+        img = au.bw_to_rgb(im_array.astype("float32"))
+        semantic_seg, instance_seg, centroids, img = inference(cellaap_widget, img)
+        semantic_movie.append(semantic_seg.astype("uint8"))
+        instance_movie.append(instance_seg.astype("uint8"))
+        if len(centroids) != 0:
+            points += (centroids,)
+        cellaap_widget.viewer.add_image(img[:, :, 0], name=name)
+
+    model_name = cellaap_widget.model_selector.currentText()
+    cellaap_widget.progress_bar.reset()
+
+    cellaap_widget.viewer.add_labels(
+        np.asarray(semantic_movie),
+        name=f"{name}_{model_name}_semantic_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}",
+        opacity=0.2,
+    )
+
+    points_array = np.vstack(points)
+    cellaap_widget.viewer.add_points(
+        points_array,
+        ndim=points_array.shape[1],
+        name=f"{name}_{model_name}_centroids_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}",
+        size=int(img.shape[1] / 200),
+    )
+
+    already_cached = [cellaap_widget.save_combo_box.itemText(i) for i in range(cellaap_widget.save_combo_box.count())]
+    cache_entry_name = f"{name}_{model_name}_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}"
+
+    if cache_entry_name in already_cached:
+        only_cache_entry = [entry for _, entry in enumerate(already_cached) if entry == cache_entry_name]
+        cache_entry_name += f"_{len(only_cache_entry)}"
+
+    cellaap_widget.save_combo_box.insertItem(
+        0,
+        cache_entry_name
+    )
+    cellaap_widget.save_combo_box.setCurrentIndex(0)
+
+    cellaap_widget.inference_cache.append(
+        {
+            "name": cache_entry_name,
+            "semantic_movie": semantic_movie,
+            "instance_movie": instance_movie,
+            "centroids": points_array,
+        }
+    )
+
+
+def batch_inference(cellaap_widget: ui.cellAAPWidget):
+
+    # sort files in cellaapwidget.file_list into tuples of (full_spec, flouro)
+    full_spec_naming_conv = cellaap_widget.full_spec_format.text()
+    flouro_naming_conv = cellaap_widget.flouro_format.text()
+
+    full_spec_file_prefixes = [file.split(full_spec_naming_conv)[0] for file in cellaap_widget.full_spectrum_files]
+    flouro_file_prefixes = [file.split(flouro_naming_conv)[0] for file in cellaap_widget.flouro_files]
+    flouro_file_suffix = cellaap_widget.flouro_files[0].split(flouro_naming_conv)[1]
+
+    try:
+        assert sorted(full_spec_file_prefixes) == sorted(flouro_file_prefixes)
+    except AssertionError:
+        raise Exception("List of full_spectrum movies does not correspond with list of flourescent movies")
+
+    cellaap_widget.flouro_files = [prefix + 'Cy5' + flouro_file_suffix for prefix in full_spec_file_prefixes]
+    num_movie_pairs = len(cellaap_widget.full_spectrum_files)
+
+    movie_tally = 0
+    while movie_tally < num_movie_pairs:
+        run_inference(cellaap_widget)
+        fileio.save(cellaap_widget)
+        movie_tally += 1
 
 def configure(cellaap_widget: ui.cellAAPWidget):
     """
@@ -280,25 +359,62 @@ def get_model(cellaap_widget):
     model_name = cellaap_widget.model_selector.currentText()
 
     url_registry = {
-        "HeLa": "doi:10.5281/zenodo.11387359",
-        "HeLaViT": "doi:10.5281/zenodo.11951629",
-        "HeLaViT(focal)": "doi:10.5281/zenodo.12206896",
+        "ResNet-1.8": "doi:10.5281/zenodo.11387359",
+        "ViTb-1.8": "doi:10.5281/zenodo.11951629",
+        "ViTbFocal-1.8": "doi:10.5281/zenodo.12585190",
+        "ViTb-1.9": "doi:10.5281/zenodo.12627315",
+        "ViTlFocal-1.9": "doi:10.5281/zenodo.12682530",
     }
 
     weights_registry = {
-        "HeLa": ("model_0004999.pth", "md5:8cccf01917e4f04e4cfeda0878bc1f8a"),
-        "HeLaViT": ("model_0008399.pth", "md5:9dd789fab740d976c27f9d179128629d"),
-        "HeLaViT(focal)": ("model_0014699.pth", "md5:36fd39cf3b053d9e540403fb0e9ca2c7"),
+        "ResNet-1.8": (
+            "model_0004999.pth",
+            "md5:8cccf01917e4f04e4cfeda0878bc1f8a"
+        ),
+        "ViTb-1.8": (
+            "model_0008399.pth",
+            "md5:9dd789fab740d976c27f9d179128629d"
+        ),
+        "ViTbFocal-1.8": (
+            "model_0014699.pth",
+            "md5:36fd39cf3b053d9e540403fb0e9ca2c7",
+        ),
+        "ViTb-1.9": (
+            "model_0019574.pth",
+            "md5:0417118a914ad279c827faf6e6d8ddcb"
+        ),
+        "ViTlFocal-1.9": (
+            "model_0034799.pth",
+            "md5:a141bac9d6fedee1e898e464be4c42c9",
+        ),
     }
 
     configs_registry = {
-        "HeLa": ("config.yaml", "md5:cf1532e9bc0ed07285554b1e28f942de", "yacs"),
-        "HeLaViT": ("config.yml", "md5:0d2c6dd677ff7bcda80e0e297c1b6766", "lazy"),
-        "HeLaViT(focal)": (
-            "vitb_bin_focal.yaml",
-            "md5:a0d3a54ef2c67d1a09dc5dde3d603b1c",
+        "ResNet-1.8": (
+            "config.yaml",
+            "md5:cf1532e9bc0ed07285554b1e28f942de",
+            "yacs"
+        ),
+        "ViTb-1.8": (
+            "config.yml",
+            "md5:0d2c6dd677ff7bcda80e0e297c1b6766",
             "lazy",
         ),
+        "ViTbFocal-1.8": (
+            "vitb_bin_focal.yaml",
+            "md5:bcd2efa5ffa1d8fa3ba12a1cb2d187fd",
+            "lazy",
+        ),
+        "ViTb-1.9": (
+            "vitb_1.9.yaml",
+            "md5:aab66adc5a1b3f126c96c01fac5e8b4d",
+            "lazy",
+        ),
+        "ViTlFocal-1.9": (
+            "vitl_focal_1.9.yaml",
+            "md5:809bc09220a8dea515c58e2ddb3cfe77",
+            "lazy",
+        )
     }
 
     model = pooch.create(
@@ -336,18 +452,20 @@ def color_masks(
     """
 
     seg_labeled = np.zeros_like(segmentations[0], int)
-    if method == "custom" and custom_dict != None:
-        for i, mask in enumerate(segmentations):
-            for j in custom_dict.keys():
-                if labels[i] == j:
-                    seg_labeled[mask] += custom_dict[j]
+    for i, mask in enumerate(segmentations):
+        loc_mask = seg_labeled[mask]
+        mask_nonzero = list(filter(lambda x: x != 0, loc_mask))
+        if len(mask_nonzero) < (loc_mask.shape[0] / 4):  # Roughly IOU < 0.5
+            if method == "custom" and custom_dict != None:
+                for j in custom_dict.keys():
+                    if labels[i] == j:
+                        seg_labeled[mask] += custom_dict[j]
 
-    if method == "random":
-        for i, mask in enumerate(segmentations):
-            if labels[i] == 0:
-                mask = erosion(mask, disk(3))
-                seg_labeled[mask] = 2 * i
             else:
-                seg_labeled[mask] = 2 * i - 1
+                mask = binary_erosion(mask, disk(3))
+                if labels[i] == 0:
+                    seg_labeled[mask] = 2 * i
+                else:
+                    seg_labeled[mask] = 2 * i - 1
 
     return seg_labeled
