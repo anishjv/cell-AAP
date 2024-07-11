@@ -3,7 +3,6 @@ import logging
 import sys
 import napari
 import napari.utils.notifications
-from numpy.core.multiarray import empty_like
 import cell_AAP.napari.ui as ui  # type:ignore
 import cell_AAP.annotation.annotation_utils as au  # type:ignore
 import cell_AAP.napari.fileio as fileio  # type: ignore
@@ -138,7 +137,7 @@ def inference(
         img_perm = np.moveaxis(img, -1, 0)
 
         with torch.inference_mode():
-            output = cellaap_widget.predictor([{"image": torch.from_numpy(img_perm)}])[
+            output = cellaap_widget.predictor([{"image": torch.from_numpy(img_perm).type(torch.float32)}])[
                 0
             ]
 
@@ -382,7 +381,7 @@ def get_model(cellaap_widget):
         "ViTb-1.8": "doi:10.5281/zenodo.11951629",
         "ViTbFocal-1.8": "doi:10.5281/zenodo.12585190",
         "ViTb-1.9": "doi:10.5281/zenodo.12627315",
-        "ViTlFocal-1.9": "doi:10.5281/zenodo.12682530",
+        "ViTlFocal-1.9": "doi:10.5281/zenodo.12700955",
     }
 
     weights_registry = {
@@ -395,7 +394,7 @@ def get_model(cellaap_widget):
         "ViTb-1.9": ("model_0019574.pth", "md5:0417118a914ad279c827faf6e6d8ddcb"),
         "ViTlFocal-1.9": (
             "model_0034799.pth",
-            "md5:a141bac9d6fedee1e898e464be4c42c9",
+            "md5:ad056dc159ea8fd12f7d5d4562c368a9",
         ),
     }
 

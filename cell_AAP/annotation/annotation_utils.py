@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import numpy.typing as npt
 import torch
 from PIL import Image
 import skimage
@@ -8,7 +9,7 @@ from skimage.morphology import white_tophat, square, disk, erosion
 from skimage.segmentation import clear_border
 from skimage.filters import (
     gaussian,
-    threshold_otsu,
+    threshold_isodata
     threshold_multiotsu,
 )  # pylint: disable=no-name-in-module
 from typing import Optional
@@ -16,12 +17,12 @@ import scipy
 
 
 def preprocess_2d(
-    image: np.ndarray,
+    image: npt.NDArray,
     threshold_division: float,
-    sigma: int,
+    sigma: float,
     threshold_type: str = "single",
     tophatstruct=square(71),
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[npt.NDArray, npt.NDArray]:
     """
     Preprocesses a specified image
     ------------------------------
@@ -43,7 +44,7 @@ def preprocess_2d(
         thresholds = threshold_multiotsu(im)
         redseg = np.digitize(im, bins=thresholds)
     else:
-        thresh = threshold_otsu(im)
+        thresh = threshold_isodata(im)
         redseg = im > (thresh / threshold_division)
     lblred = label(redseg)
     labels = label(lblred)
@@ -52,18 +53,18 @@ def preprocess_2d(
 
 
 def preprocess_3d(
-    targetstack: np.ndarray,
+    targetstack: npt.NDArray,
     threshold_division: float,
-    sigma: int,
+    sigma: float,
     threshold_type: str,
     erosionstruct,
     tophatstruct,
-) -> tuple[np.ndarray, skimage.measure.regionprops]:
+) -> tuple[npt.NDArray, skimage.measure.regionprops]:
     """
     Preprocesses a stack of images
     ------------------------------
     INPUTS:
-        targetstach: n-darray, stack of (n x n) images, i.e. a (z, n, n) dimensional array
+        targetstach: n-darray, stack of (n x n) images, i.e. a (z, n, n) dimensional asarray
         strel_cell: n-darray, structuring element for white_tophat
         threshold_division: float or int
         sigma: float or int
@@ -86,7 +87,7 @@ def preprocess_3d(
             redseg = np.digitize(im, bins=thresholds)
 
         else:
-            thresh = threshold_otsu(im)
+            thresh = threshold_isodata(im)
             redseg = im > (thresh / threshold_division)
 
         lblred = label(redseg)
@@ -97,17 +98,17 @@ def preprocess_3d(
 
 
 def bw_to_rgb(
-    image: np.ndarray,
+    image: npt.NDArray,
     max_pixel_value: Optional[int] = 255,
     min_pixel_value: Optional[int] = 0,
-) -> np.ndarray:
+) -> npt.NDArray:
     """
     Converts a tiffile of shape (x, y) to a file of shape (3, x, y) where each (x, y) frame of the first dimension corresponds to a color
     --------------------------------------------------------------------------------------------------------------------------------------
     INPUTS:
         image: n-darray, an image of shape (x, y)
-        max_pixel_value: int, the maximum desired pixel value for the output array
-        min_pixel_value: int, the minimum desired pixel value for the output array
+        max_pixel_value: int, the maximum desired pixel value for the output asarray
+        min_pixel_value: int, the minimum desired pixel value for the output asarray
     """
     if len(np.asarray(image).shape) == 2:
         image = cv2.normalize(
@@ -127,7 +128,7 @@ def bw_to_rgb(
 
 
 def get_box_size(
-    region_props, scaling_factor: float
+    region_props: skimage.measure.regionprops, scaling_factor: float
 ) -> float:
     """
     Given a skimage region props object from a flouresence microscopy image, computes the bounding box size to be used in crop_regions or crop_regions_predict
@@ -146,7 +147,7 @@ def get_box_size(
     dna_major_axis = np.median(np.asarray(major_axis))
     bb_side_length = scaling_factor * dna_major_axis
 
-    print(bb_side_length)
+    print("The bounding box side length was", bb_side_length, "pixels")
     return bb_side_length // 2
 
 
@@ -192,7 +193,7 @@ def box_size_wrapper(func, frame_props, args):
 
 
 def iou_with_list(input_box: list, boxes_list: list[list]) -> list:
-    '''
+    """
     Computes the IOU of an input box with all boxes in a given list
     ----------------------------------------------------------------
     INPUTS:
@@ -201,7 +202,7 @@ def iou_with_list(input_box: list, boxes_list: list[list]) -> list:
 
     OUPUT:
         ious: list
-    '''
+    """
     ious = []
     for box in boxes_list:
 
@@ -229,12 +230,11 @@ def predict(
     points: Optional[list] = None,
     box_prompts=False,
     point_prompts=True,
-) -> np.ndarray:
-
-    '''
+) -> npt.NDArray:
+    """
     Implementation of FAIR's SAM using box or point prompts:
     --------------------------------------------------------
-    '''
+    """
     segmentations = []
     if box_prompts == True:
 
@@ -286,22 +286,23 @@ def crop_regions_predict(
     dna_image_stack,
     phase_image_stack,
     predictor,
-    threshold_division : float,
-    sigma : int,
+    threshold_division: float,
+    sigma: float,
     erosionstruct,
     tophatstruct,
-    box_size:tuple,
+    box_size: tuple,
     point_prompts: bool = True,
     box_prompts: bool = False,
-    to_segment: bool =True,
-    threshold_type:str = 'single'
+    to_segment: bool = True,
+    threshold_type: str = "single",
+    iou_thresh: Optional[bool] = 0.85,
 ):
     """
     Given a stack of flouresence microscopy images, D, and corresponding phase images, P, returns regions cropped from D and masks from P, for each cell
     ------------------------------------------------------------------------------------------------------------------------------------------------------
     INPUTS:
-           dna_image_stack: n-darray, an array of shape (frame_count, x, y) where each (x, y) frame in the first dimension corresponds to one image
-           phase_image_stack: n-darray, an array of shape (frame_count, x, y) where each (x, y) frame in the first dimension corresponds to one image
+           dna_image_stack: n-darray, an asarray of shape (frame_count, x, y) where each (x, y) frame in the first dimension corresponds to one image
+           phase_image_stack: n-darray, an asarray of shape (frame_count, x, y) where each (x, y) frame in the first dimension corresponds to one image
            box_size: 1/2 the side length of boxes to be cropped from the input image
            predictor: SAM, predicitive algorithm for segmenting cells
            threshold_division: float or int
@@ -316,7 +317,7 @@ def crop_regions_predict(
             segmentations: rank 4 tensor containing one mask per cell per frame. It can be indexed as segmentations[mu][nu] where mu is the frame number and nu is the cell number
                            Note: segmentations must converted back to masks in the following way
                                 1) mask = np.unpackbits(instance.segmentations[1][i], axis = 0, count = 2048)
-                                2) mask = np.array([mask])
+                                2) mask = np.asarray([mask])
     """
     try:
         assert dna_image_stack.shape[0] == phase_image_stack.shape[0]
@@ -329,9 +330,17 @@ def crop_regions_predict(
     discarded_box_counter = np.asarray([])
     dna_regions = []
     segmentations = []
+    boxes = []
     box_size_func = box_size[0]
     box_size_args = box_size[1]
-    _, dna_image_region_props = preprocess_3d(dna_image_stack, threshold_division, sigma, threshold_type, erosionstruct, tophatstruct)
+    _, dna_image_region_props = preprocess_3d(
+        dna_image_stack,
+        threshold_division,
+        sigma,
+        threshold_type,
+        erosionstruct,
+        tophatstruct,
+    )
 
     for i, _ in enumerate(dna_image_region_props):
 
@@ -339,12 +348,11 @@ def crop_regions_predict(
         box_sizes = box_size_wrapper(box_size_func, frame_props, box_size_args)
         dna_regions_temp = []
         segmentations_temp = []
-        boxes = []
         discarded_box_counter = np.append(discarded_box_counter, 0)
         sam_current_image = i
         sam_previous_image = None
 
-        for j, _ in enumerate(dna_image_region_props[f'Frame_{i}']):
+        for j, _ in enumerate(dna_image_region_props[f"Frame_{i}"]):
 
             y, x = frame_props[j].centroid
             if isinstance(box_sizes, list):
@@ -355,10 +363,9 @@ def crop_regions_predict(
 
             coords_temp = [x1, y2, x2, y1]
 
-            if(
-                all(k >= 0 and k <= 2048 for k in coords_temp)
-                and all(iou < 0.8 for iou in iou_with_list(coords_temp, boxes))
-            ):
+            if all(k >= 0 and k <= 2048 for k in coords_temp) and all(
+                iou < iou_thresh for iou in iou_with_list(coords_temp, boxes)
+            ):  # experimental iou thresholding
 
                 dna_image = Image.fromarray(dna_image_stack[i, :, :])
                 dna_region = np.asarray(dna_image.crop((x1, y2, x2, y1)))
@@ -366,7 +373,6 @@ def crop_regions_predict(
                 boxes.append(coords_temp)
 
                 if to_segment == True:
-
                     if (
                         sam_current_image != sam_previous_image
                         or sam_previous_image == None
@@ -377,20 +383,29 @@ def crop_regions_predict(
                         predictor.set_image(phase_image_rgb)
                         sam_previous_image = sam_current_image
 
-
                     if box_prompts == True:
                         if len(boxes) == batch_size or (j + 1) == len(
                             dna_image_region_props[f"Frame_{i}"]
                         ):
-                            masks = predict( predictor, phase_image_rgb, boxes = boxes, box_prompts=True )
+                            masks = predict(
+                                predictor,
+                                phase_image_rgb,
+                                boxes=boxes,
+                                box_prompts=True,
+                            )
                             for l in range(masks.shape[0]):
                                 segmentations_temp.append(masks[l])
                             boxes = []
                     elif point_prompts == True:
                         points = [x, y]
-                        segmentations_temp.append(predict(
-                            predictor, phase_image_rgb, points = points, point_prompts=True
-                            ))
+                        segmentations_temp.append(
+                            predict(
+                                predictor,
+                                phase_image_rgb,
+                                points=points,
+                                point_prompts=True,
+                            )
+                        )
                 else:
                     pass
 
@@ -407,8 +422,8 @@ def crop_regions_predict(
 
 
 def counter(
-    image_region_props, discarded_box_counter: np.ndarray
-) -> tuple[float, np.ndarray]:
+    image_region_props: skimage.measure.regionprops, discarded_box_counter: npt.NDArray
+) -> tuple[float, npt.NDArray]:
     """
     Counts the number of cells per frame and number of frames processed through either crop_regions or crop_regions_predict
     ------------------------------------------------------------------------------------------------------------------------
@@ -433,13 +448,13 @@ def counter(
 
 
 def clean_regions(
-    regions: np.ndarray,
-    frame_count: int,
-    cell_count: np.ndarray,
+    regions: npt.NDArray,
+    frame_count: float,
+    cell_count: npt.NDArray,
     threshold_division: float,
-    sigma: int,
+    sigma: float,
     threshold_type: str = "single",
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
     """
     INPUTS:
           regions: must the output of 'crop_regions', is a dict containg all cropped regions
@@ -485,7 +500,7 @@ def clean_regions(
     return cleaned_regions, cleaned_intensity_regions, masks
 
 
-def add_labels(data_frame: np.ndarray, labels: np.ndarray) -> np.ndarray:
+def add_labels(data_frame: npt.NDArray, labels: npt.NDArray) -> npt.NDArray:
     """
     Adds labels to a dataframe in the labels and dataframe are of the same dimension and have the same number of rows
     ------------------------------------------------------------------------------------------------------------------
@@ -506,10 +521,10 @@ def add_labels(data_frame: np.ndarray, labels: np.ndarray) -> np.ndarray:
     return data_frame
 
 
-def binImage(img: np.ndarray, new_shape: tuple, method: str = "mean") -> np.ndarray:
+def binImage(img: npt.NDArray, new_shape: tuple, method: str = "mean") -> npt.NDArray:
     """
-    img = Original array to be binned
-    new_shape = final desired shape of the array
+    img = Original asarray to be binned
+    new_shape = final desired shape of the asarray
     method = 'min' - minimum binned
              'max' - max. binned
              'mean' - mean binned; default
@@ -545,27 +560,26 @@ def binImage(img: np.ndarray, new_shape: tuple, method: str = "mean") -> np.ndar
         out = img.max(index0).max(index1)
     elif method == "mean":
         out = img.mean(index0).mean(index1)
-
-    return out.astype('float32')
+    return out
 
 
 def write_clusters(
-    dataframe: np.ndarray, cluster_coloumn: int
-)-> dict[int, np.ndarray]:
+    dataframe: npt.NDArray, cluster_coloumn: int
+) -> dict[int : npt.NDArray]:
     """
     Takes in a dataframe containing cluster labels, and writes new arrays, one for each label
     -------------------------------------------------------------------------------------------
     INPUTS:
-        dataframe: np.ndarray, dataframe containing one coloumn that corresponds to a cluster
+        dataframe: npt.NDArray, dataframe containing one coloumn that corresponds to a cluster
         cluster_column: int, the index of the coloumn that corresponds to the clustering
 
     OUTPUTS:
-        clusters: dict, dictionary containing the cluster number as a key and the array containing [frame, cell] as values.
+        clusters: dict, dictionary containing the cluster number as a key and the asarray containing [frame, cell] as values.
     """
 
     num_clusters = int(dataframe[:, cluster_coloumn].max() + 1)
     clusters = {i: np.zeros(shape=(0, 2)) for i in range(num_clusters)}
-    clusters['noise'] = np.zeros(shape = (0, 2))
+    clusters["noise"] = np.zeros(shape=(0, 2))
 
     for i in range(dataframe.shape[0]):
         for j in range(num_clusters):
@@ -575,20 +589,20 @@ def write_clusters(
 
         if dataframe[i, cluster_coloumn] == -1:
             cluster_temp = np.asarray([[dataframe[i, -3], dataframe[i, -2]]])
-            clusters['noise'] = np.append(clusters['noise'], cluster_temp, axis=0)
+            clusters["noise"] = np.append(clusters["noise"], cluster_temp, axis=0)
 
     return clusters
 
 
-def square_reshape(img: np.ndarray, desired_shape: tuple) -> np.ndarray:
-    """"
+def square_reshape(img: npt.NDArray, desired_shape: tuple) -> npt.NDArray:
+    """ "
     Reshapes a square image
     -----------------------
     INPUTS:
-        image: np.ndarray
+        image: npt.NDArray
         desired_shape: tuple
     OUTPUTS:
-        image: np.ndarray
+        image: npt.NDArray
     """
 
     if img.shape[0] < desired_shape[0]:
@@ -603,21 +617,3 @@ def square_reshape(img: np.ndarray, desired_shape: tuple) -> np.ndarray:
         img = binImage(img, desired_shape)
 
     return img
-
-
-    def mask_iou(mask1, mask2):
-        """
-        Computes the itersection over union of two binary masks
-        -------------------------------------------------------
-        INPUTS:
-            mask1: np.ndarray[bool]
-            mask2: np.ndarry[bool]
-        OUTPUTS:
-            iou: float
-
-        """
-        mask1_area = np.count_nonzero(mask1 == 1)
-        mask2_area = np.count_nonzero(mask2 == 1)
-        intersection = np.count_nonzero(np.logical_and( mask1==1,  mask2==1 ))
-        iou = intersection/(mask1_area+mask2_area-intersection)
-        return iou

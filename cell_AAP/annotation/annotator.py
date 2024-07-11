@@ -14,7 +14,7 @@ class Annotator:
         dna_image_stack,
         phase_image_list,
         phase_image_stack,
-        configs:configs.Cfg,
+        configs: configs.Cfg,
     ):
         self.dna_image_list = dna_image_list
         self.dna_image_stack = dna_image_stack
@@ -23,7 +23,7 @@ class Annotator:
         self.configs = configs
         self.frame_count = self.cell_count = None
         self.cleaned_binary_roi = self.cleaned_scalar_roi = None
-        self.masks =  self.roi = self.labels = self.coords = self.segmentations = None
+        self.masks = self.roi = self.labels = self.coords = self.segmentations = None
         self.cropped = False
         self.df_generated = False
         self.to_segment = True
@@ -32,7 +32,12 @@ class Annotator:
         return "Instance of class, Processor, implemented to process microscopy images into regions of interest"
 
     @classmethod
-    def get(cls, configs:configs.Cfg, dna_image_list:list[str], phase_image_list:list[str]):
+    def get(
+        cls,
+        configs: configs.Cfg,
+        dna_image_list: list[str],
+        phase_image_list: list[str],
+    ):
 
         try:
             assert len(dna_image_list) == len(phase_image_list)
@@ -40,13 +45,19 @@ class Annotator:
             raise AssertionError(
                 "dna_image_list and phase_image_list must be of the same length (number of files)"
             ) from error
-        
+
         frame_step = configs.frame_step
         if len(dna_image_list) > 1:
-            dna_image_stack = [tiff.imread(dna_image_list[i])[0::frame_step, :, :] for i,_ in enumerate(dna_image_list)]
-            phase_image_stack = [tiff.imread(phase_image_list[i])[0::frame_step, :, :] for i,_ in enumerate(phase_image_list)]
-            dna_image_stack = np.concatenate(dna_image_stack, axis = 0)
-            phase_image_stack = np.concatenate(phase_image_stack, axis = 0)
+            dna_image_stack = [
+                tiff.imread(dna_image_list[i])[0::frame_step, :, :]
+                for i, _ in enumerate(dna_image_list)
+            ]
+            phase_image_stack = [
+                tiff.imread(phase_image_list[i])[0::frame_step, :, :]
+                for i, _ in enumerate(phase_image_list)
+            ]
+            dna_image_stack = np.concatenate(dna_image_stack, axis=0)
+            phase_image_stack = np.concatenate(phase_image_stack, axis=0)
 
         else:
             dna_image_stack = tiff.imread(dna_image_list[0])[0::frame_step, :, :]
@@ -98,20 +109,26 @@ class Annotator:
             predictor,
             self.configs.threshold_division,
             self.configs.gaussian_sigma,
-            self.configs.erosionstruct, 
+            self.configs.erosionstruct,
             self.configs.tophatstruct,
             self.configs.box_size,
             self.configs.point_prompts,
             self.configs.box_prompts,
             self.to_segment,
-            self.configs.threshold_type
+            self.configs.threshold_type,
+            self.configs.iou_thresh,
         )
 
         self.frame_count, self.cell_count = counter(
             region_props_stack, self.discarded_box_counter
         )
         self.cleaned_binary_roi, self.cleaned_scalar_roi, self.masks = clean_regions(
-            self.roi, self.frame_count, self.cell_count, self.configs.threshold_division, self.configs.gaussian_sigma, self.configs.threshold_type
+            self.roi,
+            self.frame_count,
+            self.cell_count,
+            self.configs.threshold_division,
+            self.configs.gaussian_sigma,
+            self.configs.threshold_type,
         )
         self.cropped = True
         return self
@@ -148,7 +165,7 @@ class Annotator:
                 "cell_count must contain the same number of frames as specified by frame_count"
             ) from error
 
-        main_df = [] 
+        main_df = []
 
         for i in range(self.frame_count):
             for j in range(self.cell_count[i]):
@@ -160,7 +177,7 @@ class Annotator:
                         extra_properties=extra_props,
                     )
 
-                    df = np.array(list(props.values())).T[0]
+                    df = np.asarray(list(props.values())).T[0]
                     tracker = [i, j]
                     df = np.append(df, tracker)
                     main_df.append(df)
@@ -169,4 +186,4 @@ class Annotator:
                     self.cell_count[i] -= 1
                     pass
 
-        return np.array(main_df)
+        return np.asarray(main_df)

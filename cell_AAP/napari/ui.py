@@ -77,14 +77,14 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         if self.batch:
             save_widgets.pop("save_selector")
 
-        value = list(named_widget.items())
-        attr_name = value[0][0]
-        label = value[0][1][0]
-        widget = value[0][1][1]
-        self._widgets.update({attr_name: widget})
-        label_widget = QtWidgets.QLabel(label)
-        label_widget.setToolTip(widget.toolTip())
-        layout.addRow(label_widget, widget)
+        self._widgets.update({key: value[1] for key, value in named_widget.items()})
+
+        for label, widget in named_widget.values():
+            label_widget = QtWidgets.QLabel(label)
+            label_widget.setToolTip(widget.toolTip())
+            layout.addRow(label_widget, widget)
+
+        layout.setLabelAlignment(Qt.AlignLeft)
 
         self._widgets.update(save_widgets)
         for widget in save_widgets.values():
@@ -140,7 +140,6 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         layout.addWidget(batch_widgets["flouro_file_list"], 0, 1, 1, 2, Qt.AlignRight)
         batch_widgets.pop("flouro_file_list")
         for i, widget in enumerate(batch_widgets.values()):
-            print(i)
             layout.addWidget(widget, 1, i, 1, 1, Qt.AlignCenter)
 
         widget_holder = QtWidgets.QGroupBox("Batch Worker")
