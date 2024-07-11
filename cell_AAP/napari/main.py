@@ -393,7 +393,7 @@ def get_model(cellaap_widget):
         ),
         "ViTb-1.9": ("model_0019574.pth", "md5:0417118a914ad279c827faf6e6d8ddcb"),
         "ViTlFocal-1.9": (
-            "model_0034799.pth",
+            "model_0043499.pth",
             "md5:ad056dc159ea8fd12f7d5d4562c368a9",
         ),
     }

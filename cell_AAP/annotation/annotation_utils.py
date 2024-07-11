@@ -9,7 +9,7 @@ from skimage.morphology import white_tophat, square, disk, erosion
 from skimage.segmentation import clear_border
 from skimage.filters import (
     gaussian,
-    threshold_isodata
+    threshold_isodata,
     threshold_multiotsu,
 )  # pylint: disable=no-name-in-module
 from typing import Optional
