@@ -129,7 +129,7 @@ def inference(
     if cellaap_widget.model_type == "yacs":
         if img.shape != (2048, 2048):
             img = au.square_reshape(img, (2048, 2048))
-        output = cellaap_widget.predictor(img)
+        output = cellaap_widget.predictor(img.astype('float32'))
 
     else:
         if img.shape != (1024, 1024):
@@ -201,13 +201,13 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             prog_count += 1
             frame += cellaap_widget.range_slider.value()[0]
             cellaap_widget.progress_bar.setValue(prog_count)
-            img = au.bw_to_rgb(im_array[frame].astype("float32"))
+            img = au.bw_to_rgb(im_array[frame])
             semantic_seg, instance_seg, centroids, img = inference(
                 cellaap_widget, img, frame - cellaap_widget.range_slider.value()[0]
             )
             movie.append(img)
-            semantic_movie.append(semantic_seg.astype("uint8"))
-            instance_movie.append(instance_seg.astype("uint8"))
+            semantic_movie.append(semantic_seg.astype("uint16"))
+            instance_movie.append(instance_seg.astype("uint16"))
             if len(centroids) != 0:
                 points += (centroids,)
         cellaap_widget.viewer.add_image(np.asarray(movie)[:, :, :, 0], name=name)
@@ -215,10 +215,10 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
     elif len(im_array.shape) == 2:
         prog_count += 1
         cellaap_widget.progress_bar.setValue(prog_count)
-        img = au.bw_to_rgb(im_array.astype("float32"))
+        img = au.bw_to_rgb(im_array)
         semantic_seg, instance_seg, centroids, img = inference(cellaap_widget, img)
-        semantic_movie.append(semantic_seg.astype("uint8"))
-        instance_movie.append(instance_seg.astype("uint8"))
+        semantic_movie.append(semantic_seg.astype("uint16"))
+        instance_movie.append(instance_seg.astype("uint16"))
         if len(centroids) != 0:
             points += (centroids,)
         cellaap_widget.viewer.add_image(img[:, :, 0], name=name)
@@ -294,7 +294,7 @@ def batch_inference(cellaap_widget: ui.cellAAPWidget):
         )
 
     cellaap_widget.flouro_files = [
-        prefix + "Cy5" + flouro_file_suffix for prefix in full_spec_file_prefixes
+        prefix + flouro_file_suffix + flouro_file_suffix for prefix in full_spec_file_prefixes
     ]
     num_movie_pairs = len(cellaap_widget.full_spectrum_files)
 

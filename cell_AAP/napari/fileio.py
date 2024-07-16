@@ -227,10 +227,12 @@ def save(cellaap_widget):
     tiff.imwrite(
         os.path.join(inference_folder_path, "semantic_movie.tif"),
         inference_result["semantic_movie"],
+        dtype = 'uint16'
     )
     tiff.imwrite(
         os.path.join(inference_folder_path, "instance_movie.tif"),
         inference_result["instance_movie"],
+        dtype = 'uint16'
     )
 
     centroids_df = pd.DataFrame(
