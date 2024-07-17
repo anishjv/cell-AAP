@@ -136,6 +136,9 @@ def save(cellaap_widget):
 
     os.mkdir(inference_folder_path)
 
+    model_name = cellaap_widget.model_selector.currentText()
+    analysis_file_prefix = inference_result_name.split(model_name)[0]
+
     # TODO
     # Make it possible to add other configs or features from within the gui
 
@@ -207,30 +210,30 @@ def save(cellaap_widget):
         ]
         names = ["Mitosis", "General", "Average Time in Mitosis"]
 
-        analysis.write_output(to_save, inference_folder_path, names, columns)
+        analysis.write_output(to_save, inference_folder_path, names, columns, file_name = analysis_file_prefix + "analysis.xlsx")
 
         state_matrix_df = pd.DataFrame(state_matrix)
         state_matrix_df.to_json(
-            os.path.join(inference_folder_path, "state_matrix.json"), orient="table"
+            os.path.join(inference_folder_path, analysis_file_prefix + "state_matrix.json"), orient="table"
         )
 
         intensity_matrix_df = pd.DataFrame(intensity_matrix)
         intensity_matrix_df.to_json(
-            os.path.join(inference_folder_path, "intensity_matrix.json"), orient="table"
+            os.path.join(inference_folder_path, analysis_file_prefix + "intensity_matrix.json"), orient="table"
         )
 
         with btrack.io.HDF5FileHandler(
-            os.path.join(inference_folder_path, "tracks.h5"), "w", obj_type="obj_type_1"
+            os.path.join(inference_folder_path, analysis_file_prefix + "tracks.h5"), "w", obj_type="obj_type_1"
         ) as writer:
             writer.write_tracks(tracks)
 
     tiff.imwrite(
-        os.path.join(inference_folder_path, "semantic_movie.tif"),
+        os.path.join(inference_folder_path, analysis_file_prefix + "semantic_movie.tif"),
         inference_result["semantic_movie"],
-        dtype = 'uint16'
+        dtype = 'uint8'
     )
     tiff.imwrite(
-        os.path.join(inference_folder_path, "instance_movie.tif"),
+        os.path.join(inference_folder_path, analysis_file_prefix + "instance_movie.tif"),
         inference_result["instance_movie"],
         dtype = 'uint16'
     )
@@ -239,7 +242,7 @@ def save(cellaap_widget):
         inference_result["centroids"], columns=["Frame", "x", "y"]
     )
     centroids_df.to_json(
-        os.path.join(inference_folder_path, "centroids.json"), orient="records"
+        os.path.join(inference_folder_path, analysis_file_prefix + "centroids.json"), orient="records"
     )
 
 

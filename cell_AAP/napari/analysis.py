@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.typing as npt
 import os
 from skimage import segmentation
 import btrack  # type: ignore
@@ -82,7 +83,7 @@ def track(
 
 def time_in_mitosis(
     tracks, interframe_duration: float, time_points: int
-) -> tuple[np.ndarray, np.ndarray, int]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
     """
     Takes in a tracks object from btrack and an interframe duration, returns a vector containing the time spent in mitosis for each track
     --------------------------------------------------------------------------------------------------------------------------------------
@@ -110,14 +111,22 @@ def time_in_mitosis(
         np.flatnonzero(mask), np.flatnonzero(~mask), state_matrix[~mask]
     )
 
-    state_duration_vec = np.sum(state_matrix, axis=1) * interframe_duration
+    last_frame_mitotic = [
+        row_index for row_index in range(state_matrix.shape[0]) if state_matrix[row_index, -1] == 1
+    ]
+
+    state_matrix_cleaned = state_matrix
+    for row_index in last_frame_mitotic:
+        state_matrix_cleaned[row_index, :] = [0 for state in state_matrix_cleaned[row_index, :]]
+
+    state_duration_vec = np.sum(state_matrix_cleaned, axis=1) * interframe_duration
     total_time = np.sum(state_duration_vec)
     num_mitotic_cells = state_duration_vec[state_duration_vec > 0].shape[
         0
     ]  # removing entries that were never mitotic
     avg_time_in_mitosis = (total_time) / (num_mitotic_cells + np.finfo(float).eps)
 
-    return state_matrix, state_duration_vec, avg_time_in_mitosis
+    return state_matrix, state_matrix_cleaned, state_duration_vec, avg_time_in_mitosis
 
 
 def cell_intensity(tracks, time_points: int) -> tuple[np.ndarray, np.ndarray]:
@@ -192,6 +201,7 @@ def write_output(
     data: list[np.ndarray],
     directory: str,
     names: list[str],
+    file_name: Optional[str] = "analysis.xlsx",
     columns: Optional[list] = None,
 ) -> None:
     """
@@ -207,14 +217,14 @@ def write_output(
     df_cache = []
     for i, array in enumerate(data):
 
-        if columns[i] == None:
+        if columns == None:
             df = pd.DataFrame(array)
 
         else:
             df = pd.DataFrame(array, columns=columns[i])
         df_cache.append(df)
 
-    filename = os.path.join(directory, "analysis.xlsx")
+    filename = os.path.join(directory, file_name)
     with pd.ExcelWriter(filename) as writer:
         [df.to_excel(writer, sheet_name=names[i]) for i, df in enumerate(df_cache)]
 
@@ -267,13 +277,13 @@ def analyze(
 
     analysis_cache = []
     num_timepoints = instance_movie.shape[0]
-    state_matrix, state_duration_vec, avg_time_in_mitosis = time_in_mitosis(
+    state_matrix, state_matrix_cleaned, state_duration_vec, avg_time_in_mitosis = time_in_mitosis(
         tracks, interframe_duration, num_timepoints
     )
 
     intensity_matrix, avg_intensity_vec = cell_intensity(tracks, num_timepoints)
     mitotic_intensity_vec = mitotic_intensity(
-        state_duration_vec, state_matrix, intensity_matrix, interframe_duration
+        state_duration_vec, state_matrix_cleaned, intensity_matrix, interframe_duration
     )
 
     return (
