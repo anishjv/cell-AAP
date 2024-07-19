@@ -31,7 +31,6 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         self.setWidgetResizable(True)  # noqa: FBT003
         self.full_spectrum_files = []
         self.flouro_files = []
-        self.batch_list_wavelength = "full_spectrum"
 
         self._main_layout = QtWidgets.QVBoxLayout()
         self._main_widget = QtWidgets.QWidget()
@@ -71,7 +70,7 @@ class cellAAPWidget(QtWidgets.QScrollArea):
     def _add_save_widgets(self):
         "Adds save_widgets with are the outputs of sub_widgets.create_save_widgets."
 
-        save_widgets, named_widget = sub_widgets.create_save_widgets()
+        save_widgets, named_widget = sub_widgets.create_save_widgets(batch = self.batch)
         layout = QtWidgets.QFormLayout()
 
         if self.batch:
@@ -134,11 +133,10 @@ class cellAAPWidget(QtWidgets.QScrollArea):
 
         layout = QtWidgets.QGridLayout()
         layout.addWidget(
-            batch_widgets["full_spectrum_file_list"], 0, 0, 1, 2, Qt.AlignLeft
+            batch_widgets["full_spectrum_file_list"], 0, 0, 1, 2, Qt.AlignCenter
         )
         batch_widgets.pop("full_spectrum_file_list")
-        layout.addWidget(batch_widgets["flouro_file_list"], 0, 1, 1, 2, Qt.AlignRight)
-        batch_widgets.pop("flouro_file_list")
+
         for i, widget in enumerate(batch_widgets.values()):
             layout.addWidget(widget, 1, i, 1, 1, Qt.AlignCenter)
 

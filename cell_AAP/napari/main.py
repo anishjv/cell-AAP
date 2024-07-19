@@ -103,15 +103,9 @@ def create_batch_widget(batch: Optional[bool] = True) -> ui.cellAAPWidget:
 
     cellaap_widget.remove_button.clicked.connect(lambda: fileio.remove(cellaap_widget))
 
-    cellaap_widget.file_list_toggle.clicked.connect(
-        lambda: fileio.toggle_wavelength(cellaap_widget)
-    )
-
     cellaap_widget.path_selector.clicked.connect(
         lambda: fileio.grab_directory(cellaap_widget)
     )
-
-    cellaap_widget.set_configs.clicked.connect(lambda: configure(cellaap_widget))
 
     return cellaap_widget
 
@@ -189,7 +183,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
         return
 
     cellaap_widget.progress_bar.setMaximum(
-        cellaap_widget.range_slider.value()[1] - cellaap_widget.range_slider.value()[0]
+        cellaap_widget.range_slider.value()[1] - cellaap_widget.range_slider.value()[0] + 1
     )
     if len(im_array.shape) == 3:
         movie = []
@@ -240,20 +234,21 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
         size=int(img.shape[1] / 200),
     )
 
-    already_cached = [
-        cellaap_widget.save_combo_box.itemText(i)
-        for i in range(cellaap_widget.save_combo_box.count())
-    ]
     cache_entry_name = f"{name}_{model_name}_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}"
-
-    if cache_entry_name in already_cached:
-        only_cache_entry = [
-            entry for _, entry in enumerate(already_cached) if entry == cache_entry_name
+    if cellaap_widget.batch == False:
+        already_cached = [
+            cellaap_widget.save_combo_box.itemText(i)
+            for i in range(cellaap_widget.save_combo_box.count())
         ]
-        cache_entry_name += f"_{len(only_cache_entry)}"
 
-    cellaap_widget.save_combo_box.insertItem(0, cache_entry_name)
-    cellaap_widget.save_combo_box.setCurrentIndex(0)
+        if cache_entry_name in already_cached:
+            only_cache_entry = [
+                entry for _, entry in enumerate(already_cached) if entry == cache_entry_name
+            ]
+            cache_entry_name += f"_{len(only_cache_entry)}"
+
+        cellaap_widget.save_combo_box.insertItem(0, cache_entry_name)
+        cellaap_widget.save_combo_box.setCurrentIndex(0)
 
     cellaap_widget.inference_cache.append(
         {
@@ -263,7 +258,6 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             "centroids": points_array,
         }
     )
-
 
 def batch_inference(cellaap_widget: ui.cellAAPWidget):
     """
@@ -281,23 +275,27 @@ def batch_inference(cellaap_widget: ui.cellAAPWidget):
         file.split(full_spec_naming_conv)[0]
         for file in cellaap_widget.full_spectrum_files
     ]
-    flouro_file_prefixes = [
-        file.split(flouro_naming_conv)[0] for file in cellaap_widget.flouro_files
-    ]
-    flouro_file_suffix = cellaap_widget.flouro_files[0].split(flouro_naming_conv)[1]
 
-    try:
-        assert sorted(full_spec_file_prefixes) == sorted(flouro_file_prefixes)
-    except AssertionError:
-        raise Exception(
-            "List of full_spectrum movies does not correspond with list of flourescent movies"
-        )
+    full_spec_file_suffix = cellaap_widget.full_spectrum_files[0].split(full_spec_naming_conv)[1]
 
     cellaap_widget.flouro_files = [
-        prefix + flouro_file_suffix + flouro_file_suffix for prefix in full_spec_file_prefixes
+        prefix + flouro_naming_conv + full_spec_file_suffix for prefix in full_spec_file_prefixes
     ]
-    num_movie_pairs = len(cellaap_widget.full_spectrum_files)
+    flouro_file_prefixes = [
+        file.split(flouro_naming_conv)[0]
+        for file in cellaap_widget.flouro_files
+    ]
 
+    existing_flouro_files = [path for path in cellaap_widget.flouro_files if os.path.exists(path)]
+    non_existing_files = set(existing_flouro_files).symmetric_difference(cellaap_widget.flouro_files)
+    try:
+        assert len(non_existing_files) == 0
+    except AssertionError:
+        raise Exception(
+            f"The file(s) {non_existing_files} do not exist"
+        )
+
+    num_movie_pairs = len(cellaap_widget.full_spectrum_files)
     movie_tally = 0
     while movie_tally < num_movie_pairs:
         run_inference(cellaap_widget)
@@ -455,6 +453,13 @@ def color_masks(
     OUTPUTS:
         seg_labeled: np.ndarray
     """
+
+    if segmentations.size(dim = 0) == 0:
+        seg_labeled = np.zeros(
+            (segmentations.size(dim = 1), segmentations.size(dim = 2)),
+            dtype = 'uint8'
+        )
+        return seg_labeled
 
     seg_labeled = np.zeros_like(segmentations[0], int)
     for i, mask in enumerate(segmentations):

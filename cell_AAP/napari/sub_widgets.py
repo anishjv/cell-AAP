@@ -1,7 +1,7 @@
 from __future__ import annotations
 from qtpy import QtWidgets
 from superqt import QLabeledRangeSlider
-from typing import Union
+from typing import Union, Optional
 
 
 def create_file_selector_widgets() -> dict[str, QtWidgets.QWidget]:
@@ -31,7 +31,7 @@ def create_file_selector_widgets() -> dict[str, QtWidgets.QWidget]:
     return widgets
 
 
-def create_save_widgets() -> (
+def create_save_widgets(batch: Optional[bool] = False) -> (
     tuple[dict[str, QtWidgets.QWidget], dict[str, tuple[str, QtWidgets.QWidget]]]
 ):
     """
@@ -49,8 +49,9 @@ def create_save_widgets() -> (
     )
     widgets = {"analyze_check_box": analyze_check_box}
 
-    save_combo_box = QtWidgets.QComboBox()
-    widgets["save_combo_box"] = save_combo_box
+    if batch == False:
+        save_combo_box = QtWidgets.QComboBox()
+        widgets["save_combo_box"] = save_combo_box
 
     interframe_duration = QtWidgets.QSpinBox()
     interframe_duration.setRange(0, 100)
@@ -164,19 +165,14 @@ def create_batch_widgets() -> dict[str, QtWidgets.QWidget]:
     """
 
     full_spectrum_file_list = QtWidgets.QListWidget()
+    full_spectrum_file_list.setToolTip("Add full spectrum files to the list, we will infer the flourescent files for you")
     widgets = {"full_spectrum_file_list": full_spectrum_file_list}
-
-    flouro_file_list = QtWidgets.QListWidget()
-    widgets['flouro_file_list'] = flouro_file_list
 
     add_button = QtWidgets.QPushButton("Add Movie")
     widgets["add_button"] = add_button
 
     remove_button = QtWidgets.QPushButton("Remove Movie")
     widgets["remove_button"] = remove_button
-
-    file_list_toggle = QtWidgets.QPushButton("Toggle List")
-    widgets["file_list_toggle"] = file_list_toggle
 
     return widgets
 
