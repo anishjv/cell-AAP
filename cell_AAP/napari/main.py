@@ -68,11 +68,11 @@ def create_cellAAP_widget(batch: Optional[bool] = False) -> ui.cellAAPWidget:
     )
 
     cellaap_widget.image_selector.clicked.connect(
-        lambda: fileio.grab_file(cellaap_widget, wavelength="full_spectrum")
+        lambda: fileio.grab_file(cellaap_widget, attribute="full_spectrum")
     )
 
     cellaap_widget.flourescent_image_selector.clicked.connect(
-        lambda: fileio.grab_file(cellaap_widget, wavelength="flourescent")
+        lambda: fileio.grab_file(cellaap_widget, attribute="flouro")
     )
 
     cellaap_widget.path_selector.clicked.connect(
@@ -107,6 +107,13 @@ def create_batch_widget(batch: Optional[bool] = True) -> ui.cellAAPWidget:
         lambda: fileio.grab_directory(cellaap_widget)
     )
 
+    cellaap_widget.flouro_media_blank.clicked.connect(
+        lambda: fileio.grab_file(cellaap_widget, attribute="flouro_blank")
+    )
+    cellaap_widget.trans_media_blank.clicked.connect(
+        lambda: fileio.grab_file(cellaap_widget, attribute="trans_blank")
+    )
+
     return cellaap_widget
 
 
@@ -123,7 +130,7 @@ def inference(
     if cellaap_widget.model_type == "yacs":
         if img.shape != (2048, 2048):
             img = au.square_reshape(img, (2048, 2048))
-        output = cellaap_widget.predictor(img.astype('float32'))
+        output = cellaap_widget.predictor(img.astype("float32"))
 
     else:
         if img.shape != (1024, 1024):
@@ -131,9 +138,9 @@ def inference(
         img_perm = np.moveaxis(img, -1, 0)
 
         with torch.inference_mode():
-            output = cellaap_widget.predictor([{"image": torch.from_numpy(img_perm).type(torch.float32)}])[
-                0
-            ]
+            output = cellaap_widget.predictor(
+                [{"image": torch.from_numpy(img_perm).type(torch.float32)}]
+            )[0]
 
     segmentations = output["instances"].pred_masks.to("cpu")
     labels = output["instances"].pred_classes.to("cpu")
@@ -168,7 +175,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
     points = ()
 
     try:
-        name, im_array = fileio.image_select(cellaap_widget, wavelength="full_spectrum")
+        name, im_array = fileio.image_select(cellaap_widget, attribute="full_spectrum")
         name = name.replace(".", "/").split("/")[-2]
     except AttributeError:
         napari.utils.notifications.show_error("No Image has been selected")
@@ -183,7 +190,9 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
         return
 
     cellaap_widget.progress_bar.setMaximum(
-        cellaap_widget.range_slider.value()[1] - cellaap_widget.range_slider.value()[0] + 1
+        cellaap_widget.range_slider.value()[1]
+        - cellaap_widget.range_slider.value()[0]
+        + 1
     )
     if len(im_array.shape) == 3:
         movie = []
@@ -243,7 +252,9 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
 
         if cache_entry_name in already_cached:
             only_cache_entry = [
-                entry for _, entry in enumerate(already_cached) if entry == cache_entry_name
+                entry
+                for _, entry in enumerate(already_cached)
+                if entry == cache_entry_name
             ]
             cache_entry_name += f"_{len(only_cache_entry)}"
 
@@ -258,6 +269,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             "centroids": points_array,
         }
     )
+
 
 def batch_inference(cellaap_widget: ui.cellAAPWidget):
     """
@@ -276,24 +288,28 @@ def batch_inference(cellaap_widget: ui.cellAAPWidget):
         for file in cellaap_widget.full_spectrum_files
     ]
 
-    full_spec_file_suffix = cellaap_widget.full_spectrum_files[0].split(full_spec_naming_conv)[1]
+    full_spec_file_suffix = cellaap_widget.full_spectrum_files[0].split(
+        full_spec_naming_conv
+    )[1]
 
     cellaap_widget.flouro_files = [
-        prefix + flouro_naming_conv + full_spec_file_suffix for prefix in full_spec_file_prefixes
+        prefix + flouro_naming_conv + full_spec_file_suffix
+        for prefix in full_spec_file_prefixes
     ]
     flouro_file_prefixes = [
-        file.split(flouro_naming_conv)[0]
-        for file in cellaap_widget.flouro_files
+        file.split(flouro_naming_conv)[0] for file in cellaap_widget.flouro_files
     ]
 
-    existing_flouro_files = [path for path in cellaap_widget.flouro_files if os.path.exists(path)]
-    non_existing_files = set(existing_flouro_files).symmetric_difference(cellaap_widget.flouro_files)
+    existing_flouro_files = [
+        path for path in cellaap_widget.flouro_files if os.path.exists(path)
+    ]
+    non_existing_files = set(existing_flouro_files).symmetric_difference(
+        cellaap_widget.flouro_files
+    )
     try:
         assert len(non_existing_files) == 0
     except AssertionError:
-        raise Exception(
-            f"The file(s) {non_existing_files} do not exist"
-        )
+        raise Exception(f"The file(s) {non_existing_files} do not exist")
 
     num_movie_pairs = len(cellaap_widget.full_spectrum_files)
     movie_tally = 0
@@ -454,10 +470,9 @@ def color_masks(
         seg_labeled: np.ndarray
     """
 
-    if segmentations.size(dim = 0) == 0:
+    if segmentations.size(dim=0) == 0:
         seg_labeled = np.zeros(
-            (segmentations.size(dim = 1), segmentations.size(dim = 2)),
-            dtype = 'uint8'
+            (segmentations.size(dim=1), segmentations.size(dim=2)), dtype="uint8"
         )
         return seg_labeled
 

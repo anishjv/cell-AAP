@@ -11,23 +11,34 @@ import napari
 import btrack
 import napari.utils.notifications
 from typing import Optional
+from skimage.filters import gaussian
+import cell_AAP.annotation.annotation_utils as au
 
 
 def image_select(
-    cellaap_widget: ui.cellAAPWidget, wavelength: str, pop: Optional[bool] = True
+    cellaap_widget: ui.cellAAPWidget, attribute: str, pop: Optional[bool] = True
 ):
     """
     Returns the path selected in the image selector box and the array corresponding the to path
     -------------------------------------------------------------------------------------------
     """
-    if wavelength == "full_spectrum":
-        file = cellaap_widget.full_spectrum_files[0]
-        if pop:
-            cellaap_widget.full_spectrum_files.pop(0)
-    else:
-        file = cellaap_widget.flouro_files[0]
-        if pop:
-            cellaap_widget.flouro_files.pop(0)
+
+    match attribute.split():
+        case ["full_spectrum"]:
+            file = cellaap_widget.full_spectrum_files[0]
+            if pop:
+                cellaap_widget.full_spectrum_files.pop(0)
+        case ["flouro"]:
+            file = cellaap_widget.flouro_files[0]
+            if pop:
+                cellaap_widget.flouro_files.pop(0)
+        case ["flouro_blank"]:
+            file = cellaap_widget.flouro_blank
+        case ["trans_blank"]:
+            file = cellaap_widget.trans_blank
+        case _:
+            print("Attribute of assignment was not valid")
+
 
     if (
         re.search(
@@ -52,9 +63,9 @@ def display(cellaap_widget: ui.cellAAPWidget):
     """
     try:
         name, layer_data = image_select(
-            cellaap_widget, wavelength="full_spectrum", pop=False
+            cellaap_widget, attribute="full_spectrum", pop=False
         )
-    except AttributeError:
+    except AttributeError or TypeError:
         napari.utils.notifications.show_error("No Image has been selected")
         return
 
@@ -62,7 +73,7 @@ def display(cellaap_widget: ui.cellAAPWidget):
     cellaap_widget.viewer.add_image(layer_data, name=name)
 
 
-def grab_file(cellaap_widget: ui.cellAAPWidget):
+def grab_file(cellaap_widget: ui.cellAAPWidget, attribute: str):
     """
     Initiates a QtWidget.QFileDialog instance and grabs a file
     -----------------------------------------------------------
@@ -77,17 +88,29 @@ def grab_file(cellaap_widget: ui.cellAAPWidget):
         filter=file_filter,
     )
 
-    cellaap_widget.full_spectrum_files = file_names
+    match attribute.split():
+        case ["full_spectrum"]:
+            cellaap_widget.full_spectrum_files = file_names
+        case ["flouro"]:
+            cellaap_widget.flouro_files = file_names
+        case ["flouro_blank"]:
+            cellaap_widget.flouro_blank = file_names[0]
+        case ["trans_blank"]:
+            cellaap_widget.trans_blank = file_names[0]
+        case _:
+            print("Attribute of assignment was not valid")
+            return
 
-    try:
-        shape = tiff.imread(file_names[0]).shape
-        napari.utils.notifications.show_info(
-            f"File: {file_names[0]} is queued for inference/analysis"
-        )
-        cellaap_widget.range_slider.setRange(min=0, max=shape[0] - 1)
-        cellaap_widget.range_slider.setValue((0, shape[1]))
-    except AttributeError or IndexError:
-        napari.utils.notifications.show_error("No file was selected")
+    if attribute in ["full_spectrum", "flouro"]:
+        try:
+            shape = tiff.imread(file_names[0]).shape
+            napari.utils.notifications.show_info(
+                f"File: {file_names[0]} is queued for inference/analysis"
+            )
+            cellaap_widget.range_slider.setRange(min=0, max=shape[0] - 1)
+            cellaap_widget.range_slider.setValue((0, shape[1]))
+        except AttributeError or IndexError:
+            napari.utils.notifications.show_error("No file was selected")
 
 
 def grab_directory(cellaap_widget):
@@ -141,12 +164,11 @@ def save(cellaap_widget):
 
     # TODO
     # Make it possible to add other configs or features from within the gui
-
+    instance_movie = np.asarray(inference_result["instance_movie"])
     if cellaap_widget.analyze_check_box.isChecked():
-        instance_movie = np.asarray(inference_result["instance_movie"])
         try:
             intensity_movie_path, intensity_movie = image_select(
-                cellaap_widget, wavelength="flourescent"
+                cellaap_widget, attribute="flouro"
             )
         except AttributeError:
             napari.utils.notifications.show_error(
@@ -164,34 +186,94 @@ def save(cellaap_widget):
             instance_movie, intensity_movie
         )
 
-        state_matrix, intensity_matrix, x_coords, y_coords = analysis.analyze_raw(tracks, instance_movie, cellaap_widget.interframe_duration.value())
-
+        state_matrix, intensity_matrix, x_coords, y_coords = analysis.analyze_raw(
+            tracks, instance_movie, cellaap_widget.interframe_duration.value()
+        )
 
         to_save = [state_matrix, intensity_matrix, x_coords, y_coords]
         names = ["State Matrix", "Intensity Matrix", "X Coordinates", "Y Coordinates"]
-        analysis.write_output(to_save, inference_folder_path, names, file_name = analysis_file_prefix + "analysis.xlsx")
+        analysis.write_output(
+            to_save,
+            inference_folder_path,
+            names,
+            file_name=analysis_file_prefix + "analysis.xlsx",
+        )
 
         with btrack.io.HDF5FileHandler(
-            os.path.join(inference_folder_path, analysis_file_prefix + "tracks.h5"), "w", obj_type="obj_type_1"
+            os.path.join(inference_folder_path, analysis_file_prefix + "tracks.h5"),
+            "w",
+            obj_type="obj_type_1",
         ) as writer:
             writer.write_tracks(tracks)
 
     tiff.imwrite(
-        os.path.join(inference_folder_path, analysis_file_prefix + "semantic_movie.tif"),
+        os.path.join(
+            inference_folder_path, analysis_file_prefix + "semantic_movie.tif"
+        ),
         inference_result["semantic_movie"],
-        dtype = 'uint8'
+        dtype="uint8",
     )
 
     tiff.imwrite(
-        os.path.join(inference_folder_path, analysis_file_prefix + "instance_movie.tif"),
+        os.path.join(
+            inference_folder_path, analysis_file_prefix + "instance_movie.tif"
+        ),
         inference_result["instance_movie"],
-        dtype = 'uint16'
+        dtype="uint16",
     )
+
+
+    if hasattr(cellaap_widget, "flouro_blank"):
+
+        _, flouro_blank = image_select(
+            cellaap_widget,
+            attribute = "flouro_blank"
+        )
+
+        intensity_mapping = analysis.gen_intensitymap(
+            image = flouro_blank
+        )
+
+        if intensity_mapping.shape != instance_movie[0].shape:
+            intensity_mapping = au.square_reshape(intensity_mapping, instance_movie[0].shape)
+
+        tiff.imwrite(
+            os.path.join(
+                inference_folder_path, analysis_file_prefix + "intensity_map.tif"
+            ),
+            intensity_mapping,
+        )
+
+    if hasattr(cellaap_widget, "trans_blank"):
+
+        _, trans_blank = image_select(
+            cellaap_widget,
+            attribute = "trans_blank"
+        )
+
+        background_mapping_resize = []
+        for plane in range(trans_blank.shape[0]):
+            if trans_blank[0].shape != instance_movie[0].shape:
+                mapping = au.square_reshape(trans_blank[plane], instance_movie[0].shape)
+            else:
+                mapping = trans_blank[plane]
+            mapping = gaussian(mapping, sigma = 40, preserve_range = True)
+            background_mapping_resize.append(mapping)
+
+        background_mapping = np.asarray(background_mapping_resize)
+
+        tiff.imwrite(
+            os.path.join(
+                inference_folder_path, analysis_file_prefix + "background_map.tif"
+            ),
+            background_mapping.astype("uint16"),
+            dtype = "uint16"
+        )
 
 def add(cellaap_widget: ui.cellAAPWidget):
     "Adds a movie to the batch worker"
 
-    grab_file(cellaap_widget)
+    grab_file(cellaap_widget, attribute="full_spectrum")
     for file in cellaap_widget.full_spectrum_files:
         cellaap_widget.full_spectrum_file_list.addItem(file)
 

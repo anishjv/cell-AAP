@@ -31,9 +31,9 @@ def create_file_selector_widgets() -> dict[str, QtWidgets.QWidget]:
     return widgets
 
 
-def create_save_widgets(batch: Optional[bool] = False) -> (
-    tuple[dict[str, QtWidgets.QWidget], dict[str, tuple[str, QtWidgets.QWidget]]]
-):
+def create_save_widgets(
+    batch: Optional[bool] = False,
+) -> tuple[dict[str, QtWidgets.QWidget], dict[str, tuple[str, QtWidgets.QWidget]]]:
     """
     Creates Inference Saving Widgets
     ------------------------------
@@ -165,7 +165,9 @@ def create_batch_widgets() -> dict[str, QtWidgets.QWidget]:
     """
 
     full_spectrum_file_list = QtWidgets.QListWidget()
-    full_spectrum_file_list.setToolTip("Add full spectrum files to the list, we will infer the flourescent files for you")
+    full_spectrum_file_list.setToolTip(
+        "Add full spectrum files to the list, we will infer the flourescent files for you"
+    )
     widgets = {"full_spectrum_file_list": full_spectrum_file_list}
 
     add_button = QtWidgets.QPushButton("Add Movie")
@@ -188,9 +190,19 @@ def create_naming_convention_widgets() -> dict[str, tuple[str, QtWidgets.QWidget
     """
 
     full_spec_format = QtWidgets.QLineEdit()
-    widgets = {"full_spec_format": ("Full Spectrum Naming Convention", full_spec_format)}
+    widgets = {
+        "full_spec_format": ("Full Spectrum Naming Convention", full_spec_format)
+    }
 
     flouro_format = QtWidgets.QLineEdit()
     widgets["flouro_format"] = ("Flourescence Naming Convention", flouro_format)
+
+    flouro_media_blank = QtWidgets.QPushButton("Select Image")
+    flouro_media_blank.setToolTip("Optional, add a stack of (x, y, z) equal to that of the stack being segmented")
+    widgets["flouro_media_blank"] = ("Flourescence Media Blank", flouro_media_blank)
+
+    trans_media_blank = QtWidgets.QPushButton("Select Image")
+    trans_media_blank.setToolTip("Optional, add a stack of (x, y, z) equal to that of the stack being segmented")
+    widgets["trans_media_blank"] = ("Translucent Media Blank", trans_media_blank)
 
     return widgets

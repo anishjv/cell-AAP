@@ -1,6 +1,8 @@
 import numpy as np
 import numpy.typing as npt
 import os
+import skimage
+import scipy
 from skimage import segmentation
 import btrack  # type: ignore
 from btrack import datasets  # type:ignore
@@ -10,6 +12,36 @@ import tifffile as tiff
 import cell_AAP.napari.ui as ui
 import cell_AAP.napari.fileio as fileio
 import cell_AAP.annotation.annotation_utils as au
+
+
+def projection(im_array: np.ndarray, projection_type: str):
+
+    if im_array.shape[0] % 2 == 0:
+        center_index = im_array.shape[0] // 2 - 1
+    else:
+        center_index = im_array.shape[0] // 2
+
+    range = center_index // 2
+
+    try:
+        assert projection_type in ["max", "min", "average"]
+    except AssertionError:
+        print("Projection type was not valid, valid types include: max, min, mean")
+
+    if projection_type == "max":
+        projected_image = np.max(
+            im_array[center_index - range : center_index + range], axis=0
+        )
+    elif projection_type == "average":
+        projected_image = np.mean(
+            im_array[center_index - range : center_index + range], axis=0
+        )
+    elif projection_type == "min":
+        projected_image = np.min(
+            im_array[center_index - range : center_index + range], axis=0
+        )
+
+    return np.array(projected_image)
 
 
 def track(
@@ -112,12 +144,16 @@ def time_in_mitosis(
     )
 
     last_frame_mitotic = [
-        row_index for row_index in range(state_matrix.shape[0]) if state_matrix[row_index, -1] == 1
+        row_index
+        for row_index in range(state_matrix.shape[0])
+        if state_matrix[row_index, -1] == 1
     ]
 
     state_matrix_cleaned = state_matrix
     for row_index in last_frame_mitotic:
-        state_matrix_cleaned[row_index, :] = [0 for state in state_matrix_cleaned[row_index, :]]
+        state_matrix_cleaned[row_index, :] = [
+            0 for state in state_matrix_cleaned[row_index, :]
+        ]
 
     state_duration_vec = np.sum(state_matrix_cleaned, axis=1) * interframe_duration
     total_time = np.sum(state_duration_vec)
@@ -261,8 +297,7 @@ def compile_tracking_coords(
     return init_vec, term_vec, init_vec_mitotic, term_vec_mitotic
 
 
-
-def timepoints_in_mitosis(state_matrix : npt.NDArray):
+def timepoints_in_mitosis(state_matrix: npt.NDArray):
     """
     Reads a matrix specifying whether or not a track was in mitosis at a given timepoint and outputs a vector of strings, where the string specifying all the timepoints at which that track was in mitosis'
     --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -272,11 +307,12 @@ def timepoints_in_mitosis(state_matrix : npt.NDArray):
         index_vec: list[list], vector of strings, each string specifies the timepoints at which the track was mitotic, i.e -14-15-16-17 corresponds to the track being mitotic from the 14-17th frames
     """
 
-
     index_vec = []
     for row in range(state_matrix.shape[0]):
         mitotic_index_str = ""
-        mitotic_index_vec = [index for index, value in enumerate(state_matrix[row]) if value > 0]
+        mitotic_index_vec = [
+            index for index, value in enumerate(state_matrix[row]) if value > 0
+        ]
         for index in mitotic_index_vec:
             mitotic_index_str += f"-{index}"
         if mitotic_index_str == "":
@@ -284,6 +320,7 @@ def timepoints_in_mitosis(state_matrix : npt.NDArray):
         index_vec.append([mitotic_index_str])
 
     return index_vec
+
 
 def analyze(
     tracks,
@@ -299,10 +336,9 @@ def analyze(
     See docstrings of aforemtioned functions for inputs and outputs
     """
 
-    analysis_cache = []
     num_timepoints = instance_movie.shape[0]
-    state_matrix, state_matrix_cleaned, state_duration_vec, avg_time_in_mitosis = time_in_mitosis(
-        tracks, interframe_duration, num_timepoints
+    state_matrix, state_matrix_cleaned, state_duration_vec, avg_time_in_mitosis = (
+        time_in_mitosis(tracks, interframe_duration, num_timepoints)
     )
 
     intensity_matrix, avg_intensity_vec = cell_intensity(tracks, num_timepoints)
@@ -319,9 +355,8 @@ def analyze(
         avg_intensity_vec,
         mitotic_intensity_vec,
         state_matrix,
-        index_vec
+        index_vec,
     )
-
 
 
 def analyze_raw(
@@ -346,11 +381,11 @@ def analyze_raw(
         )
         intensity_matrix.append(intensity_matrix_row)
 
-        x_coords_row = np.zeros(shape = (time_points,))
+        x_coords_row = np.zeros(shape=(time_points,))
         x_coords_row[0 : len(cell.x)] = cell.x
         x_coords.append(x_coords_row)
 
-        y_coords_row = np.zeros(shape = (time_points,))
+        y_coords_row = np.zeros(shape=(time_points,))
         y_coords_row[0 : len(cell.y)] = cell.y
         y_coords.append(y_coords_row)
 
@@ -379,3 +414,21 @@ def analyze_raw(
     )
 
     return state_matrix, intensity_matrix, x_coords, y_coords
+
+
+def gen_intensitymap(image: npt.NDArray) -> npt.NDArray:
+    """
+    Computes the intensity map for flouresence microscopy intensity normalization if the input is a blank with flourescent media
+    ----------------------------------------------------------------------------------------------------------------------------
+    INPUTS:
+        image: npt.NDArray
+    OUTPUTPS:
+        intensity_map: npt.NDArray
+    """
+
+    mean_plane = projection(image, "average")
+    med_filtered_mean_plane = scipy.ndimage.median_filter(mean_plane, 9)
+    smoothed_mean_plane = skimage.filters.gaussian(med_filtered_mean_plane, 45)
+    intensity_map = smoothed_mean_plane / (np.max(smoothed_mean_plane))
+
+    return intensity_map

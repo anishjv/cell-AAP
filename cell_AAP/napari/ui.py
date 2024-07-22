@@ -70,7 +70,7 @@ class cellAAPWidget(QtWidgets.QScrollArea):
     def _add_save_widgets(self):
         "Adds save_widgets with are the outputs of sub_widgets.create_save_widgets."
 
-        save_widgets, named_widget = sub_widgets.create_save_widgets(batch = self.batch)
+        save_widgets, named_widget = sub_widgets.create_save_widgets(batch=self.batch)
         layout = QtWidgets.QFormLayout()
 
         if self.batch:
@@ -145,7 +145,7 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         self._main_layout.addWidget(widget_holder)
 
     def _add_naming_widgets(self):
-        "Adds batch_widgets which are the output of sub_widgets.create_batch_widgets. The aforementioned function outputs -> dict[str: tuple[str, QtWidgets.QWidget]]"
+        "Adds naming convention widgets which are the output of sub_widgets.create_naming_convention_widgets. The aforementioned function outputs -> dict[str: tuple[str, QtWidgets.QWidget]]"
 
         naming_widgets = sub_widgets.create_naming_convention_widgets()
         self._widgets.update({key: value[1] for key, value in naming_widgets.items()})
@@ -158,6 +158,6 @@ class cellAAPWidget(QtWidgets.QScrollArea):
 
         layout.setLabelAlignment(Qt.AlignLeft)
 
-        widget_holder = QtWidgets.QGroupBox("Wavelength Naming Conventions")
+        widget_holder = QtWidgets.QGroupBox("\u03bb " + "Naming Conventions / Blanks")
         widget_holder.setLayout(layout)
         self._main_layout.addWidget(widget_holder, stretch=0)
