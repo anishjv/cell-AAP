@@ -95,4 +95,4 @@ def time_in_mitosis(
             c="0",
         )
 
-        return fig
+    return fig

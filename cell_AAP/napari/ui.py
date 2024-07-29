@@ -70,21 +70,14 @@ class cellAAPWidget(QtWidgets.QScrollArea):
     def _add_save_widgets(self):
         "Adds save_widgets with are the outputs of sub_widgets.create_save_widgets."
 
-        save_widgets, named_widget = sub_widgets.create_save_widgets(batch=self.batch)
+        save_widgets = sub_widgets.create_save_widgets(batch=self.batch)
         layout = QtWidgets.QFormLayout()
 
         if self.batch:
             save_widgets.pop("save_selector")
 
-        self._widgets.update({key: value[1] for key, value in named_widget.items()})
-
-        for label, widget in named_widget.values():
-            label_widget = QtWidgets.QLabel(label)
-            label_widget.setToolTip(widget.toolTip())
-            layout.addRow(label_widget, widget)
 
         layout.setLabelAlignment(Qt.AlignLeft)
-
         self._widgets.update(save_widgets)
         for widget in save_widgets.values():
             layout.addRow(widget)

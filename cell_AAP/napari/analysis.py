@@ -114,8 +114,8 @@ def track(
 
 
 def time_in_mitosis(
-    tracks, interframe_duration: float, time_points: int
-) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, int]:
+    state_matrix : npt.NDArray, interframe_duration: float
+) -> tuple[ npt.NDArray, npt.NDArray, int]:
     """
     Takes in a tracks object from btrack and an interframe duration, returns a vector containing the time spent in mitosis for each track
     --------------------------------------------------------------------------------------------------------------------------------------
@@ -127,21 +127,6 @@ def time_in_mitosis(
         state_duration_vec: npt.NDArray, indexed like "state_duration_vec[cell]"
         avg_time_in_mitosis: int
     """
-
-    state_matrix = []
-    for cell in tracks:
-        state_matrix_row = np.zeros(shape=(time_points,))
-        state_matrix_row[0 : len(cell.properties["class_id"])] = cell.properties[
-            "class_id"
-        ]
-        state_matrix.append(state_matrix_row)
-
-    state_matrix = np.asarray(state_matrix)
-
-    mask = np.isnan(state_matrix)  # may not be the optimal way to handle NaN values
-    state_matrix[mask] = np.interp(
-        np.flatnonzero(mask), np.flatnonzero(~mask), state_matrix[~mask]
-    )
 
     last_frame_mitotic = [
         row_index
@@ -162,7 +147,7 @@ def time_in_mitosis(
     ]  # removing entries that were never mitotic
     avg_time_in_mitosis = (total_time) / (num_mitotic_cells + np.finfo(float).eps)
 
-    return state_matrix, state_matrix_cleaned, state_duration_vec, avg_time_in_mitosis
+    return state_matrix_cleaned, state_duration_vec, avg_time_in_mitosis
 
 
 def cell_intensity(tracks, time_points: int) -> tuple[npt.NDArray, npt.NDArray]:
@@ -322,45 +307,8 @@ def timepoints_in_mitosis(state_matrix: npt.NDArray):
     return index_vec
 
 
-def analyze(
-    tracks,
-    instance_movie: npt.NDArray,
-    interframe_duration: float,
-) -> tuple[npt.NDArray, int, npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray, list]:
-    """
-    Composite function that facillitates the joint running of
-        - time_in_mitosis()
-        - cell_intensity()
-        - mitotic_intensity()
-
-    See docstrings of aforemtioned functions for inputs and outputs
-    """
-
-    num_timepoints = instance_movie.shape[0]
-    state_matrix, state_matrix_cleaned, state_duration_vec, avg_time_in_mitosis = (
-        time_in_mitosis(tracks, interframe_duration, num_timepoints)
-    )
-
-    intensity_matrix, avg_intensity_vec = cell_intensity(tracks, num_timepoints)
-    mitotic_intensity_vec = mitotic_intensity(
-        state_duration_vec, state_matrix_cleaned, intensity_matrix, interframe_duration
-    )
-
-    index_vec = timepoints_in_mitosis(state_matrix)
-
-    return (
-        state_duration_vec,
-        avg_time_in_mitosis,
-        intensity_matrix,
-        avg_intensity_vec,
-        mitotic_intensity_vec,
-        state_matrix,
-        index_vec,
-    )
-
-
 def analyze_raw(
-    tracks, instance_movie, interframe_duration: float
+    tracks, instance_movie
 ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
 
     state_matrix = []

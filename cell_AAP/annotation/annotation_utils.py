@@ -12,7 +12,7 @@ from skimage.filters import (
     threshold_isodata,
     threshold_multiotsu,
 )  # pylint: disable=no-name-in-module
-from typing import Optional
+from typing import Optional, Union
 import scipy
 
 
@@ -55,7 +55,7 @@ def preprocess_2d(
 def preprocess_3d(
     targetstack: npt.NDArray,
     threshold_division: float,
-    sigma: float,
+    sigma: int,
     threshold_type: str,
     erosionstruct,
     tophatstruct,
@@ -73,6 +73,7 @@ def preprocess_3d(
     """
 
     region_props = {}
+    labels_whole = []
 
     for i in range(targetstack.shape[0]):
         im = targetstack[i, :, :].copy()
@@ -93,8 +94,11 @@ def preprocess_3d(
         lblred = label(redseg)
         labels = label(lblred)
         region_props[f"Frame_{i}"] = regionprops(labels, intensity_image=labels * im)
+        labels_whole.append(labels)
 
-    return labels, region_props
+    labels_whole = np.asarray(labels_whole)
+
+    return labels_whole, region_props
 
 
 def bw_to_rgb(
@@ -287,7 +291,7 @@ def crop_regions_predict(
     phase_image_stack,
     predictor,
     threshold_division: float,
-    sigma: float,
+    sigma: int,
     erosionstruct,
     tophatstruct,
     box_size: tuple,
@@ -295,7 +299,7 @@ def crop_regions_predict(
     box_prompts: bool = False,
     to_segment: bool = True,
     threshold_type: str = "single",
-    iou_thresh: Optional[bool] = 0.85,
+    iou_thresh: Optional[float] = 0.85,
 ):
     """
     Given a stack of flouresence microscopy images, D, and corresponding phase images, P, returns regions cropped from D and masks from P, for each cell
@@ -333,6 +337,7 @@ def crop_regions_predict(
     boxes = []
     box_size_func = box_size[0]
     box_size_args = box_size[1]
+
     _, dna_image_region_props = preprocess_3d(
         dna_image_stack,
         threshold_division,
@@ -565,7 +570,7 @@ def binImage(img: npt.NDArray, new_shape: tuple, method: str = "mean") -> npt.ND
 
 def write_clusters(
     dataframe: npt.NDArray, cluster_coloumn: int
-) -> dict[int : npt.NDArray]:
+) -> dict[Union[str, int], npt.NDArray]:
     """
     Takes in a dataframe containing cluster labels, and writes new arrays, one for each label
     -------------------------------------------------------------------------------------------

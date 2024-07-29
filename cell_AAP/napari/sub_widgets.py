@@ -33,7 +33,7 @@ def create_file_selector_widgets() -> dict[str, QtWidgets.QWidget]:
 
 def create_save_widgets(
     batch: Optional[bool] = False,
-) -> tuple[dict[str, QtWidgets.QWidget], dict[str, tuple[str, QtWidgets.QWidget]]]:
+) -> dict[str, QtWidgets.QWidget]:
     """
     Creates Inference Saving Widgets
     ------------------------------
@@ -53,17 +53,6 @@ def create_save_widgets(
         save_combo_box = QtWidgets.QComboBox()
         widgets["save_combo_box"] = save_combo_box
 
-    interframe_duration = QtWidgets.QSpinBox()
-    interframe_duration.setRange(0, 100)
-    interframe_duration.setValue(10)
-    interframe_duration.setStepType(QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType)
-    interframe_duration.setToolTip(
-        "Time between frames of the movie for analysis, in any units "
-    )
-    named_widgets = {
-        "interframe_duration": ("Interframe Duration", interframe_duration)
-    }
-
     path_selector = QtWidgets.QPushButton("Select Directory")
     path_selector.setToolTip(
         "Select a directory to ultimately store the inference results at"
@@ -75,7 +64,7 @@ def create_save_widgets(
 
     widgets["save_selector"] = save_selector
 
-    return widgets, named_widgets
+    return widgets
 
 
 def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:

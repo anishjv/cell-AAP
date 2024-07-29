@@ -5,7 +5,8 @@ import napari
 import napari.utils.notifications
 import cell_AAP.napari.ui as ui  # type:ignore
 import cell_AAP.annotation.annotation_utils as au  # type:ignore
-import cell_AAP.napari.fileio as fileio  # type: ignore
+import cell_AAP.napari.fileio as fileio # type: ignore
+import cell_AAP.napari.analysis as analysis # type: ignore
 
 import numpy as np
 import cv2
@@ -14,6 +15,7 @@ import re
 import os
 import torch
 import skimage.measure
+from skimage.filters import gaussian
 from skimage.morphology import binary_erosion, disk
 import pooch
 
@@ -306,6 +308,7 @@ def batch_inference(cellaap_widget: ui.cellAAPWidget):
     non_existing_files = set(existing_flouro_files).symmetric_difference(
         cellaap_widget.flouro_files
     )
+
     try:
         assert len(non_existing_files) == 0
     except AssertionError:
@@ -317,6 +320,67 @@ def batch_inference(cellaap_widget: ui.cellAAPWidget):
         run_inference(cellaap_widget)
         fileio.save(cellaap_widget)
         movie_tally += 1
+
+    try:
+        filepath = cellaap_widget.dir_grabber
+    except AttributeError:
+        napari.utils.notifications.show_error(
+            "No Directory has been selected - will save output to current working directory"
+        )
+        filepath = os.getcwd()
+        pass
+
+
+    inference_result = cellaap_widget.inference_cache[-1]
+    instance_movie = np.asarray(inference_result["instance_movie"])
+    model_name = cellaap_widget.model_selector.currentText()
+    analysis_file_prefix = inference_result["name"].split(full_spec_naming_conv)[0]
+    if hasattr(cellaap_widget, "flouro_blank"):
+
+        _, flouro_blank = fileio.image_select(
+            cellaap_widget,
+            attribute = "flouro_blank"
+        )
+
+        intensity_mapping = analysis.gen_intensitymap(
+            image = flouro_blank
+        )
+
+        if intensity_mapping.shape != instance_movie.shape:
+            intensity_mapping = au.square_reshape(intensity_mapping, instance_movie[0].shape)
+
+        tiff.imwrite(
+            os.path.join(
+                filepath, analysis_file_prefix + "intensity_map.tif"
+            ),
+            intensity_mapping,
+        )
+
+    if hasattr(cellaap_widget, "trans_blank"):
+
+        _, trans_blank = fileio.image_select(
+            cellaap_widget,
+            attribute = "trans_blank"
+        )
+
+        background_mapping_resize = []
+        for plane in range(trans_blank.shape[0]):
+            if trans_blank[0].shape != instance_movie[0].shape:
+                mapping = au.square_reshape(trans_blank[plane], instance_movie[0].shape)
+            else:
+                mapping = trans_blank[plane]
+            mapping = gaussian(mapping, sigma = 40, preserve_range = True)
+            background_mapping_resize.append(mapping)
+
+        background_mapping = np.asarray(background_mapping_resize)
+
+        tiff.imwrite(
+            os.path.join(
+                filepath, analysis_file_prefix + "background_map.tif"
+            ),
+            background_mapping.astype("uint16"),
+            dtype = "uint16"
+        )
 
 
 def configure(cellaap_widget: ui.cellAAPWidget):

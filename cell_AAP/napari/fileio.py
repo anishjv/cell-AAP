@@ -155,12 +155,12 @@ def save(cellaap_widget):
             )
         )[0]
 
-    inference_folder_path = os.path.join(filepath, inference_result_name)
+    inference_folder_path = os.path.join(filepath, inference_result_name + "_inference")
 
     os.mkdir(inference_folder_path)
 
     model_name = cellaap_widget.model_selector.currentText()
-    analysis_file_prefix = inference_result_name.split(model_name)[0]
+    analysis_file_prefix = inference_result_name.split(cellaap_widget.full_spec_format.text())[0]
 
     # TODO
     # Make it possible to add other configs or features from within the gui
@@ -187,7 +187,7 @@ def save(cellaap_widget):
         )
 
         state_matrix, intensity_matrix, x_coords, y_coords = analysis.analyze_raw(
-            tracks, instance_movie, cellaap_widget.interframe_duration.value()
+            tracks, instance_movie
         )
 
         to_save = [state_matrix, intensity_matrix, x_coords, y_coords]
@@ -214,61 +214,6 @@ def save(cellaap_widget):
         dtype="uint8",
     )
 
-    tiff.imwrite(
-        os.path.join(
-            inference_folder_path, analysis_file_prefix + "instance_movie.tif"
-        ),
-        inference_result["instance_movie"],
-        dtype="uint16",
-    )
-
-
-    if hasattr(cellaap_widget, "flouro_blank"):
-
-        _, flouro_blank = image_select(
-            cellaap_widget,
-            attribute = "flouro_blank"
-        )
-
-        intensity_mapping = analysis.gen_intensitymap(
-            image = flouro_blank
-        )
-
-        if intensity_mapping.shape != instance_movie[0].shape:
-            intensity_mapping = au.square_reshape(intensity_mapping, instance_movie[0].shape)
-
-        tiff.imwrite(
-            os.path.join(
-                inference_folder_path, analysis_file_prefix + "intensity_map.tif"
-            ),
-            intensity_mapping,
-        )
-
-    if hasattr(cellaap_widget, "trans_blank"):
-
-        _, trans_blank = image_select(
-            cellaap_widget,
-            attribute = "trans_blank"
-        )
-
-        background_mapping_resize = []
-        for plane in range(trans_blank.shape[0]):
-            if trans_blank[0].shape != instance_movie[0].shape:
-                mapping = au.square_reshape(trans_blank[plane], instance_movie[0].shape)
-            else:
-                mapping = trans_blank[plane]
-            mapping = gaussian(mapping, sigma = 40, preserve_range = True)
-            background_mapping_resize.append(mapping)
-
-        background_mapping = np.asarray(background_mapping_resize)
-
-        tiff.imwrite(
-            os.path.join(
-                inference_folder_path, analysis_file_prefix + "background_map.tif"
-            ),
-            background_mapping.astype("uint16"),
-            dtype = "uint16"
-        )
 
 def add(cellaap_widget: ui.cellAAPWidget):
     "Adds a movie to the batch worker"
