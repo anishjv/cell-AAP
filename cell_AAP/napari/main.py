@@ -231,8 +231,11 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
     model_name = cellaap_widget.model_selector.currentText()
     cellaap_widget.progress_bar.reset()
 
+    semantic_movie= np.asarray(semantic_movie)
+    instance_movie = np.asarray(instance_movie)
+
     cellaap_widget.viewer.add_labels(
-        np.asarray(semantic_movie),
+        semantic_movie,
         name=f"{name}_{model_name}_semantic_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}",
         opacity=0.2,
     )

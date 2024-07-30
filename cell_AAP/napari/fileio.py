@@ -94,11 +94,23 @@ def grab_file(cellaap_widget: ui.cellAAPWidget, attribute: str):
         case ["flouro"]:
             cellaap_widget.flouro_files = file_names
         case ["flouro_blank"]:
-            cellaap_widget.flouro_blank = file_names[0]
+            try:
+                cellaap_widget.flouro_blank = file_names[0]
+                napari.utils.notifications.show_info(
+                    f"File: {cellaap_widget.flouro_blank} is queued as the flourescent blank "
+                )
+            except IndexError:
+                napari.utils.notifications.show_error("No File was selected")
         case ["trans_blank"]:
-            cellaap_widget.trans_blank = file_names[0]
+            try:
+                cellaap_widget.trans_blank = file_names[0]
+                napari.utils.notifications.show_info(
+                    f"File: {cellaap_widget.trans_blank} is queued as the full_spectrum blank "
+                )
+            except IndexError:
+                napari.utils.notifications.show_error("No File was selected")
         case _:
-            print("Attribute of assignment was not valid")
+            napari.utils.notifications.show_error("Attribute of assignment was invalid")
             return
 
     if attribute in ["full_spectrum", "flouro"]:
@@ -211,7 +223,7 @@ def save(cellaap_widget):
             inference_folder_path, analysis_file_prefix + "semantic_movie.tif"
         ),
         inference_result["semantic_movie"],
-        dtype="uint8",
+        dtype="uint16",
     )
 
 
