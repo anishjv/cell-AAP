@@ -5,22 +5,6 @@ from typing import Optional
 import matplotlib.pyplot as plt
 
 
-def read_excel(path: str, sheet_name: str | list[str]) -> pd.DataFrame:
-    '''
-    Reads an excel file into a pandas dataframe
-    ---------------------------------------------
-    INPUTS:
-        path: str
-        sheet_name: str | list[str]
-    OUTPUTS:
-        df: pd.DataFrame
-    '''
-
-    df = pd.read_excel(path, sheet_name=sheet_name)
-    return df
-
-
-
 def time_in_mitosis(
     df: pd.DataFrame,
     x: str,
@@ -66,11 +50,8 @@ def time_in_mitosis(
         plt.suptitle(title, fontsize=30, fontweight="bold")
 
     if bin:
-        x_vec = df[x].max()
-        bins = np.linspace(df[x].min(), df[x].max(), 11)
         labels = np.linspace(1, 10, 10)
-        df["bin"] = pd.cut(df[x], bins=bins, labels=labels)
-
+        df["bin"], bins = pd.qcut(df[x], q = 10, labels=labels, retbins = True)
         binned_dfs = [df[df["bin"] == label] for _, label in enumerate(labels)]
         binned_averages = [
             binned_df[y].mean() for _, binned_df in enumerate(binned_dfs)
@@ -79,6 +60,9 @@ def time_in_mitosis(
             (binned_df[y].std() / (len(binned_df[y]) + np.finfo(float).eps))
             for _, binned_df in enumerate(binned_dfs)
         ]
+
+        bins = np.asarray(bins)
+        binned_averages = np.asarray(binned_averages)
         bin_centers = [
             (bins[i] + bins[i + 1]) / 2
             for i, _ in enumerate(bins)

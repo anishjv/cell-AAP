@@ -1,18 +1,9 @@
 import numpy as np
-import numpy.typing as npt
 import os
-import skimage
-import scipy
-from skimage import segmentation
-import btrack  # type: ignore
-from btrack import datasets  # type:ignore
 import pandas as pd
 import re
-from typing import Optional
 import tifffile as tiff
 import cell_AAP.napari.analysis as analysis
-import cell_AAP.napari.fileio as fileio
-import cell_AAP.napari.graphing as graph
 import cell_AAP.annotation.annotation_utils as au
 
 """
