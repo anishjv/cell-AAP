@@ -49,6 +49,8 @@ def time_in_mitosis(
     if title:
         plt.suptitle(title, fontsize=30, fontweight="bold")
 
+    df = df[~(df[y] <= 10)].copy()
+
     if bin:
         labels = np.linspace(1, 10, 10)
         df["bin"], bins = pd.qcut(df[x], q = 10, labels=labels, retbins = True)

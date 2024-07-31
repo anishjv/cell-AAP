@@ -2,6 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 import re
+import math
 import tifffile as tiff
 import cell_AAP.napari.analysis as analysis
 import cell_AAP.annotation.annotation_utils as au
@@ -67,8 +68,9 @@ def main():
             ).to_numpy(dtype="float")[:, 1:]
 
             if (len(intensity_map), len(background_map)) == (1, 1):
-                intensity_map = tiff.imread(intensity_map[0])
-                background_map = tiff.imread(background_map[0])
+                print("Normalization maps were found")
+                intensity_movie = tiff.imread(intensity_map[0])
+                background_movie = tiff.imread(background_map[0])
 
                 x_coords = pd.read_excel(
                     f"{home_dir}/{prefix}_analysis.xlsx", "X Coordinates"
@@ -79,10 +81,13 @@ def main():
 
                 for i in range(intensity_matrix.shape[0]):  # tracks
                     for j in range(intensity_matrix.shape[1]):  # frames
-                        x = round(x_coords[i, j])
-                        y = round(y_coords[i, j])
-                        intensity_matrix[i, j] /= intensity_map[x, y]
-                        intensity_matrix[i, j] -= background_map[j, x, y]
+                        x = math.floor(x_coords[i, j])
+                        y = math.floor(y_coords[i, j])
+                        intensity_matrix[i, j] /= intensity_movie[x, y]
+                        intensity_matrix[i, j] -= background_movie[j, x, y]
+
+            else:
+                print("Normalization maps were not found")
 
             mitotic_intensity_vec = analysis.mitotic_intensity(
                 state_duration_vec,
