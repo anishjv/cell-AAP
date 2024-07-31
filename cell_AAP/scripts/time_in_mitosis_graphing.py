@@ -13,8 +13,6 @@ Again, this script is not general and assumes some things about the root directo
     4) We assume that the columns B:C in the sheet "Post Analysis" within the analysis file correspond to the variables "Duration in Mitosis" and "Flourescence in Mitosis" respectively
 """
 
-
-
 def main():
     root_dir = input(
         "Please enter path to home directory where analysis folders are stored: "

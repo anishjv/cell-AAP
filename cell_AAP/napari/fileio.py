@@ -167,15 +167,17 @@ def save(cellaap_widget):
             )
         )[0]
 
-    inference_folder_path = os.path.join(filepath, inference_result_name + "_inference")
-
-    os.mkdir(inference_folder_path)
 
     model_name = cellaap_widget.model_selector.currentText()
-    analysis_file_prefix = inference_result_name.split(cellaap_widget.full_spec_format.text())[0]
+    try:
+        position = re.search(r"_s\d_", inference_result_name).group()
+        analysis_file_prefix = inference_result_name.split(position)[0] + position
+    except Exception as error:
+        analysis_file_prefix = inference_result_name.split(model_name)[0]
 
-    # TODO
-    # Make it possible to add other configs or features from within the gui
+    inference_folder_path = os.path.join(filepath, inference_result_name + "_inference")
+    os.mkdir(inference_folder_path)
+
     instance_movie = np.asarray(inference_result["instance_movie"])
     if cellaap_widget.analyze_check_box.isChecked():
         try:

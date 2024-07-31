@@ -5,8 +5,8 @@ import napari
 import napari.utils.notifications
 import cell_AAP.napari.ui as ui  # type:ignore
 import cell_AAP.annotation.annotation_utils as au  # type:ignore
-import cell_AAP.napari.fileio as fileio # type: ignore
-import cell_AAP.napari.analysis as analysis # type: ignore
+import cell_AAP.napari.fileio as fileio  # type: ignore
+import cell_AAP.napari.analysis as analysis  # type: ignore
 
 import numpy as np
 import cv2
@@ -215,7 +215,6 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             instance_movie.append(instance_seg.astype("uint16"))
             if len(centroids) != 0:
                 points += (centroids,)
-        cellaap_widget.viewer.add_image(np.asarray(movie)[:, :, :, 0], name=name)
 
     elif len(im_array.shape) == 2:
         prog_count += 1
@@ -226,30 +225,38 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
         instance_movie.append(instance_seg.astype("uint16"))
         if len(centroids) != 0:
             points += (centroids,)
-        cellaap_widget.viewer.add_image(img[:, :, 0], name=name)
 
     model_name = cellaap_widget.model_selector.currentText()
     cellaap_widget.progress_bar.reset()
 
-    semantic_movie= np.asarray(semantic_movie)
+    semantic_movie = np.asarray(semantic_movie)
     instance_movie = np.asarray(instance_movie)
-
-    cellaap_widget.viewer.add_labels(
-        semantic_movie,
-        name=f"{name}_{model_name}_semantic_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}",
-        opacity=0.2,
-    )
-
     points_array = np.vstack(points)
-    cellaap_widget.viewer.add_points(
-        points_array,
-        ndim=points_array.shape[1],
-        name=f"{name}_{model_name}_centroids_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}",
-        size=int(img.shape[1] / 200),
-    )
 
     cache_entry_name = f"{name}_{model_name}_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}"
     if cellaap_widget.batch == False:
+
+        try:
+            cellaap_widget.viewer.add_image(np.asarray(movie)[:, :, :, 0], name=name)
+        except UnboundLocalError:
+            try:
+                cellaap_widget.viewer.add_image(img[:, :, 0], name=name)
+            except:
+                pass
+
+        cellaap_widget.viewer.add_labels(
+            semantic_movie,
+            name=f"{name}_{model_name}_semantic_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}",
+            opacity=0.2,
+        )
+
+        cellaap_widget.viewer.add_points(
+            points_array,
+            ndim=points_array.shape[1],
+            name=f"{name}_{model_name}_centroids_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}",
+            size=int(img.shape[1] / 200),
+        )
+
         already_cached = [
             cellaap_widget.save_combo_box.itemText(i)
             for i in range(cellaap_widget.save_combo_box.count())
@@ -333,38 +340,38 @@ def batch_inference(cellaap_widget: ui.cellAAPWidget):
         filepath = os.getcwd()
         pass
 
-
     inference_result = cellaap_widget.inference_cache[-1]
     instance_movie = np.asarray(inference_result["instance_movie"])
-    model_name = cellaap_widget.model_selector.currentText()
-    analysis_file_prefix = inference_result["name"].split(full_spec_naming_conv)[0]
+
     if hasattr(cellaap_widget, "flouro_blank"):
 
-        _, flouro_blank = fileio.image_select(
-            cellaap_widget,
-            attribute = "flouro_blank"
+        flouro_blank_name, flouro_blank = fileio.image_select(
+            cellaap_widget, attribute="flouro_blank"
         )
 
-        intensity_mapping = analysis.gen_intensitymap(
-            image = flouro_blank
-        )
+        intensity_file_prefix = flouro_blank_name.split("/")[-1].split(
+            flouro_naming_conv
+        )[0]
+
+        intensity_mapping = analysis.gen_intensitymap(image=flouro_blank)
 
         if intensity_mapping.shape != instance_movie.shape:
-            intensity_mapping = au.square_reshape(intensity_mapping, instance_movie[0].shape)
+            intensity_mapping = au.square_reshape(
+                intensity_mapping, instance_movie[0].shape
+            )
 
         tiff.imwrite(
-            os.path.join(
-                filepath, analysis_file_prefix + "intensity_map.tif"
-            ),
+            os.path.join(filepath, intensity_file_prefix + "intensity_map.tif"),
             intensity_mapping,
         )
 
     if hasattr(cellaap_widget, "trans_blank"):
 
-        _, trans_blank = fileio.image_select(
-            cellaap_widget,
-            attribute = "trans_blank"
+        trans_file_name, trans_blank = fileio.image_select(
+            cellaap_widget, attribute="trans_blank"
         )
+
+        trans_file_prefix = trans_file_name.split("/")[-1].split(flouro_naming_conv)[0]
 
         background_mapping_resize = []
         for plane in range(trans_blank.shape[0]):
@@ -372,17 +379,15 @@ def batch_inference(cellaap_widget: ui.cellAAPWidget):
                 mapping = au.square_reshape(trans_blank[plane], instance_movie[0].shape)
             else:
                 mapping = trans_blank[plane]
-            mapping = gaussian(mapping, sigma = 40, preserve_range = True)
+            mapping = gaussian(mapping, sigma=40, preserve_range=True)
             background_mapping_resize.append(mapping)
 
         background_mapping = np.asarray(background_mapping_resize)
 
         tiff.imwrite(
-            os.path.join(
-                filepath, analysis_file_prefix + "background_map.tif"
-            ),
+            os.path.join(filepath, trans_file_prefix + "background_map.tif"),
             background_mapping.astype("uint16"),
-            dtype = "uint16"
+            dtype="uint16",
         )
 
 
