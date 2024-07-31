@@ -28,15 +28,14 @@ def main():
 
 
     well_pairs = []
-    if inference_dirs != []:
-        for dir in sorted(inference_dirs):
-            well = re.search(r"[A-G]([0][1-9]|[1][1-2])", dir).group() #find the well name of the first inference directory
+    for dir in sorted(inference_dirs):
+        well = re.search(r"[A-G]([0][1-9]|[1][1-2])", dir).group() #find the well name of the first inference directory
+        well_pair = [ dir for dir in inference_dirs if well in dir ]
+        if well_pair != []:
             well_pairs.append(
-                [ dir for dir in inference_dirs if well in dir ]
+                well_pair
             )   #search the through the inference directory, and grab all directories containing the well name
             inference_dirs = [dir for dir in inference_dirs if dir not in well_pairs[-1]]  #remove the directories added to the list of well pairs
-    else:
-        pass
 
     for pair in well_pairs:
         positions = [re.search(r"[s]\d", pair_entry).group() for pair_entry in pair]
