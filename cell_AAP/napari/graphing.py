@@ -1,9 +1,34 @@
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import seaborn as sns
+import scipy.optimize as opt
 from typing import Optional
 import matplotlib.pyplot as plt
 
+
+
+def logistic(x, a, b, c, d):
+    "General logistic function"
+    return a / (1. + np.exp(-c * (x - d))) + b
+
+def linear(x, a, m, b):
+    "General linear function"
+    return m*(x- a) + b
+
+def fit_wrapper(func_name: str, x: npt.NDArray, y: npt.NDArray):
+    "Takes a function name and returns the optimized function corresponding function"
+
+    match func_name.split():
+        case ["logistic"]:
+            params, _= opt.curve_fit(logistic, x, y, method = 'trf')
+            print(params)
+            return logistic(x, *params)
+        case ["linear"]:
+            params, _=  opt.curve_fit(linear, x, y)
+            return linear(x, *params)
+        case _:
+            raise ValueError(f"Value of func_name = {func_name} was not a valid option")
 
 def time_in_mitosis(
     df: pd.DataFrame,
@@ -13,6 +38,7 @@ def time_in_mitosis(
     alt_xlabel: Optional[str] = None,
     alt_ylabel: Optional[str] = None,
     title: Optional[str] = None,
+    fit: str = "n"
 ):
 
     """
@@ -32,9 +58,8 @@ def time_in_mitosis(
     """
 
     sns.set_style("white")
-    fig, ax = plt.subplots(1, 1, figsize=(20, 15), sharex=True, sharey=True)
-    sns.scatterplot(data=df, x=x, y=y, color="0.8")
-    sns.despine()
+    fig, ax = plt.subplots(1, 1, figsize=(20, 15))
+    sns.scatterplot(data=df, x=x, y=y, color="0.8", ax=ax)
 
     (
         ax.set_xlabel(alt_xlabel, fontsize=20, fontweight="bold")
@@ -71,7 +96,7 @@ def time_in_mitosis(
             if i < (len(bins) - 1)
         ]
 
-        plt.errorbar(
+        ax.errorbar(
             bin_centers,
             binned_averages,
             yerr=binned_errors,
@@ -80,5 +105,13 @@ def time_in_mitosis(
             capsize=6,
             c="0",
         )
+
+        if fit != "n":
+            try:
+                func = fit_wrapper(fit, df[x].dropna().values, df[y].dropna().values)
+                curve_data = pd.DataFrame({'curve_x' : df[x].dropna().values, 'curve_y' : func},)
+                sns.lineplot(data = curve_data, x = 'curve_x', y = 'curve_y', ax = ax, color = 'b')
+            except Exception as error:
+                print(error)
 
     return fig

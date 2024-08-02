@@ -45,7 +45,7 @@ def main():
     ]
 
     for home_dir in home_dirs:
-        well = re.search(r"[A-G]([0][1-9]|[1][1-2])", home_dir).group()
+        well = re.search(r"[A-H]([0][1-9]|[1][1-2])", home_dir).group()
         position = re.search(r"[s]\d", home_dir).group()
         prefix = str(home_dir.split("/")[-1].split(position)[0] + position)
 

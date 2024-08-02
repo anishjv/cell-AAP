@@ -13,6 +13,8 @@ Again, this script is not general and assumes some things about the root directo
     4) We assume that the columns B:C in the sheet "Post Analysis" within the analysis file correspond to the variables "Duration in Mitosis" and "Flourescence in Mitosis" respectively
 """
 
+
+
 def main():
     root_dir = input(
         "Please enter path to home directory where analysis folders are stored: "
@@ -27,7 +29,7 @@ def main():
 
     well_pairs = []
     for dir in sorted(inference_dirs):
-        well = re.search(r"[A-G]([0][1-9]|[1][1-2])", dir).group() #find the well name of the first inference directory
+        well = re.search(r"[A-H]([0][1-9]|[1][1-2])", dir).group() #find the well name of the first inference directory
         well_pair = [ dir for dir in inference_dirs if well in dir ]
         if well_pair != []:
             well_pairs.append(
@@ -37,7 +39,6 @@ def main():
 
     for pair in well_pairs:
         positions = [re.search(r"[s]\d", pair_entry).group() for pair_entry in pair]
-        print(pair)
         data = []
         wells = []
 
@@ -46,10 +47,9 @@ def main():
             analysis_file_validity = os.path.exists(f"{pair_entry}/{prefix}_analysis.xlsx")
 
             wells.append(
-                re.search(r"[A-G]([0][1-9]|[1][1-2])", pair_entry).group()
+                re.search(r"[A-H]([0][1-9]|[1][1-2])", pair_entry).group()
             )
 
-            print(analysis_file_validity)
             if analysis_file_validity:
                 data.append(
                     pd.read_excel(
@@ -61,7 +61,6 @@ def main():
             else:
                 print(f"Analsysis file: {pair_entry}/{prefix}_analysis.xlsx, was not found")
 
-        print(data)
         try:
             data_table = pd.concat(
                 data,
@@ -84,6 +83,11 @@ def main():
         else:
             title = wells_str
 
+        fit = str(
+            input(f"Would you like to fit a curve to these data (logistic/linear/n): ")
+        )
+
+
         fig = graph.time_in_mitosis(
             df = data_table,
             x = "Intensity in Mitosis",
@@ -91,7 +95,8 @@ def main():
             bin = True,
             alt_xlabel = "mCherry Flourescence (abt. units)",
             alt_ylabel = "Time in Mitosis (mins.)",
-            title = title
+            title = title,
+            fit = fit
         )
 
 
