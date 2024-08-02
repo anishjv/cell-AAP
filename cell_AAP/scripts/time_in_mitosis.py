@@ -99,7 +99,7 @@ def main():
             index_vec = analysis.timepoints_in_mitosis(state_matrix)
 
             mitotic_duration_vec = state_duration_vec[state_duration_vec > 0]
-            mitotic_intensity_vec = mitotic_intensity_vec[mitotic_intensity_vec > 0]
+            mitotic_intensity_vec = mitotic_intensity_vec[state_duration_vec > 0]
 
             arr1 = np.asarray([mitotic_duration_vec, mitotic_intensity_vec]).T
             columns1 = ["Duration in Mitosis", "Intensity in Mitosis"]

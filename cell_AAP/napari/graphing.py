@@ -38,7 +38,9 @@ def time_in_mitosis(
     alt_xlabel: Optional[str] = None,
     alt_ylabel: Optional[str] = None,
     title: Optional[str] = None,
-    fit: str = "n"
+    fit: str = "n",
+    xlim:  Optional[list] = None,
+    ylim: Optional[list] = None,
 ):
 
     """
@@ -74,11 +76,16 @@ def time_in_mitosis(
     if title:
         plt.suptitle(title, fontsize=30, fontweight="bold")
 
+    if xlim:
+        ax.set_xlim(xlim)
+    if ylim:
+        ax.set_ylim(ylim)
+
     df = df[~(df[y] <= 10)].copy()
 
     if bin:
-        labels = np.linspace(1, 10, 10)
-        df["bin"], bins = pd.qcut(df[x], q = 10, labels=labels, retbins = True)
+        labels = np.linspace(1, 20, 20)
+        df["bin"], bins = pd.qcut(df[x], q = 20, labels=labels, retbins = True)
         binned_dfs = [df[df["bin"] == label] for _, label in enumerate(labels)]
         binned_averages = [
             binned_df[y].mean() for _, binned_df in enumerate(binned_dfs)
@@ -108,8 +115,8 @@ def time_in_mitosis(
 
         if fit != "n":
             try:
-                func = fit_wrapper(fit, df[x].dropna().values, df[y].dropna().values)
-                curve_data = pd.DataFrame({'curve_x' : df[x].dropna().values, 'curve_y' : func},)
+                func = fit_wrapper(fit, np.asarray(bin_centers), np.asarray(binned_averages))
+                curve_data = pd.DataFrame({'curve_x' : np.asarray(bin_centers), 'curve_y' : func},)
                 sns.lineplot(data = curve_data, x = 'curve_x', y = 'curve_y', ax = ax, color = 'b')
             except Exception as error:
                 print(error)

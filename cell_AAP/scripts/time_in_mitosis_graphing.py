@@ -19,6 +19,19 @@ def main():
     root_dir = input(
         "Please enter path to home directory where analysis folders are stored: "
     )
+    limits = input(
+        "Would you like to set x and y axis limits for these data (y/n): "
+    )
+
+    if limits != 'n':
+        x_lower = int(input("Please enter x axis lower bound: "))
+        x_upper = int(input("Please enter x axis upper bound: "))
+        y_lower = int(input("Please enter y axis lower bound: "))
+        y_upper = int(input("Please enter y axis upper bound: "))
+        xlim = [x_lower, x_upper]
+        ylim = [y_lower, y_upper]
+    else:
+        xlim, ylim = None, None
 
     inference_dirs = [
         f.path
@@ -72,7 +85,7 @@ def main():
 
 
         alt_title = str(
-            input(f"Would you like to assign an alternate title to the graph for wells {pair[0]}- {pair[-1]} (y/n): ")
+            input(f"Would you like to assign an alternate title to the graph for wells {wells[0]}- {wells[-1]} (y/n): ")
         )
 
         wells_str = [
@@ -96,7 +109,9 @@ def main():
             alt_xlabel = "mCherry Flourescence (abt. units)",
             alt_ylabel = "Time in Mitosis (mins.)",
             title = title,
-            fit = fit
+            fit = fit,
+            xlim = xlim,
+            ylim = ylim
         )
 
 
