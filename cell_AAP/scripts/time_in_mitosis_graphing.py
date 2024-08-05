@@ -52,16 +52,12 @@ def main():
 
     for pair in well_pairs:
         positions = [re.search(r"[s]\d", pair_entry).group() for pair_entry in pair]
+        well = re.search(r"[A-H]([0][1-9]|[1][1-2])", pair).group()
         data = []
-        wells = []
 
         for i, pair_entry in enumerate(pair):
             prefix = str(pair_entry.split("/")[-1].split(positions[i])[0] + positions[i])
             analysis_file_validity = os.path.exists(f"{pair_entry}/{prefix}_analysis.xlsx")
-
-            wells.append(
-                re.search(r"[A-H]([0][1-9]|[1][1-2])", pair_entry).group()
-            )
 
             if analysis_file_validity:
                 data.append(
@@ -85,16 +81,14 @@ def main():
 
 
         alt_title = str(
-            input(f"Would you like to assign an alternate title to the graph for wells {wells[0]}- {wells[-1]} (y/n): ")
+            input(f"Would you like to assign an alternate title to the graph for well {well}({positions[0]}-{positions[-1]}) (y/n): ")
         )
 
-        wells_str = [
-            "" + str(well) for well in wells
-            ][0]
+        std_title = f"{well}({positions[0]}-{positions[-1]}"
         if "y" in alt_title:
             title = input("Enter: title: ")
         else:
-            title = wells_str
+            title = std_title
 
         fit = str(
             input(f"Would you like to fit a curve to these data (logistic/linear/n): ")
@@ -115,7 +109,7 @@ def main():
         )
 
 
-        fig.savefig(f"{pair[-1]}/{wells_str}_time_in_mitosis.png")
+        fig.savefig(f"{pair[-1]}/{title}_time_in_mitosis.png")
 
 
 if __name__ == "__main__":

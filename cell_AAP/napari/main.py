@@ -85,6 +85,8 @@ def create_cellAAP_widget(batch: Optional[bool] = False) -> ui.cellAAPWidget:
 
     cellaap_widget.set_configs.clicked.connect(lambda: configure(cellaap_widget))
 
+    cellaap_widget.results_display.clicked.connect(lambda: disp_inf_results(cellaap_widget))
+
     return cellaap_widget
 
 
@@ -115,6 +117,8 @@ def create_batch_widget(batch: Optional[bool] = True) -> ui.cellAAPWidget:
     cellaap_widget.trans_media_blank.clicked.connect(
         lambda: fileio.grab_file(cellaap_widget, attribute="trans_blank")
     )
+
+    cellaap_widget.results_display.clicked.connect(lambda: disp_inf_results(cellaap_widget))
 
     return cellaap_widget
 
@@ -244,34 +248,22 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             except:
                 pass
 
-        cellaap_widget.viewer.add_labels(
-            semantic_movie,
-            name=f"{name}_{model_name}_semantic_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}",
-            opacity=0.2,
-        )
 
-        cellaap_widget.viewer.add_points(
-            points_array,
-            ndim=points_array.shape[1],
-            name=f"{name}_{model_name}_centroids_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}",
-            size=int(img.shape[1] / 200),
-        )
+    already_cached = [
+        cellaap_widget.save_combo_box.itemText(i)
+        for i in range(cellaap_widget.save_combo_box.count())
+    ]
 
-        already_cached = [
-            cellaap_widget.save_combo_box.itemText(i)
-            for i in range(cellaap_widget.save_combo_box.count())
+    if cache_entry_name in already_cached:
+        only_cache_entry = [
+            entry
+            for _, entry in enumerate(already_cached)
+            if entry == cache_entry_name
         ]
+        cache_entry_name += f"_{len(only_cache_entry)}"
 
-        if cache_entry_name in already_cached:
-            only_cache_entry = [
-                entry
-                for _, entry in enumerate(already_cached)
-                if entry == cache_entry_name
-            ]
-            cache_entry_name += f"_{len(only_cache_entry)}"
-
-        cellaap_widget.save_combo_box.insertItem(0, cache_entry_name)
-        cellaap_widget.save_combo_box.setCurrentIndex(0)
+    cellaap_widget.save_combo_box.insertItem(0, cache_entry_name)
+    cellaap_widget.save_combo_box.setCurrentIndex(0)
 
     cellaap_widget.inference_cache.append(
         {
@@ -566,3 +558,39 @@ def color_masks(
                     seg_labeled[mask] = 2 * i - 1
 
     return seg_labeled
+
+
+def disp_inf_results(cellaap_widget) -> None:
+
+    "Displays inference/analysis results when called"
+
+    result_name = cellaap_widget.save_combo_box.currentText()
+    result = list(
+        filter(
+            lambda x: x["name"] in f"{result_name}",
+            cellaap_widget.inference_cache,
+        )
+    )[0]
+
+
+    cellaap_widget.viewer.add_labels(
+        result['semantic_movie'],
+        name=f"semantic_{result_name}",
+        opacity=0.2,
+    )
+
+
+    cellaap_widget.viewer.add_points(
+        result['centroids'],
+        ndim=result['centroids'].shape[1],
+        name=f"centroids_{result_name}",
+        size=int(result['semantic_movie'].shape[1] / 200),
+    )
+
+    try:
+        data = result['data']
+        properties = result['properties']
+        graph = result['graph']
+        cellaap_widget.viewer.add_tracks(data, properties=properties, graph=graph, name = f"tracks_{result_name}")
+    except KeyError:
+        napari.utils.notifications.show_info("Tracks layer will not be shown, user has likely not analyzed inference results")

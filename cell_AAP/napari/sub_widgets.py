@@ -49,9 +49,8 @@ def create_save_widgets(
     )
     widgets = {"analyze_check_box": analyze_check_box}
 
-    if batch == False:
-        save_combo_box = QtWidgets.QComboBox()
-        widgets["save_combo_box"] = save_combo_box
+    save_combo_box = QtWidgets.QComboBox()
+    widgets["save_combo_box"] = save_combo_box
 
     path_selector = QtWidgets.QPushButton("Select Directory")
     path_selector.setToolTip(
@@ -63,6 +62,11 @@ def create_save_widgets(
     save_selector.setToolTip("Click to save the inference results")
 
     widgets["save_selector"] = save_selector
+
+    results_display = QtWidgets.QPushButton("Display Results")
+    results_display.setToolTip('Display Inference and tracking results if they exist')
+
+    widgets['results_display'] = results_display
 
     return widgets
 

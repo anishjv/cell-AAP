@@ -155,17 +155,14 @@ def save(cellaap_widget):
         filepath = os.getcwd()
         pass
 
-    if cellaap_widget.batch:
-        inference_result = cellaap_widget.inference_cache[-1]
-        inference_result_name = inference_result["name"]
-    else:
-        inference_result_name = cellaap_widget.save_combo_box.currentText()
-        inference_result = list(
-            filter(
-                lambda x: x["name"] in f"{inference_result_name}",
-                cellaap_widget.inference_cache,
-            )
-        )[0]
+
+    inference_result_name = cellaap_widget.save_combo_box.currentText()
+    inference_result = list(
+        filter(
+            lambda x: x["name"] in f"{inference_result_name}",
+            cellaap_widget.inference_cache,
+        )
+    )[0]
 
 
     model_name = cellaap_widget.model_selector.currentText()
@@ -199,6 +196,20 @@ def save(cellaap_widget):
         tracks, data, properties, graph, cfg = analysis.track(
             instance_movie, intensity_movie
         )
+
+        tracking_update = {
+            'data': data,
+            'properties': properties,
+            'graph': graph
+        }
+
+        list(
+            filter(
+                lambda x: x["name"] in f"{inference_result_name}",
+                cellaap_widget.inference_cache,
+            )
+        )[0].update(tracking_update)
+
 
         state_matrix, intensity_matrix, x_coords, y_coords = analysis.analyze_raw(
             tracks, instance_movie
