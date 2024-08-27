@@ -460,6 +460,7 @@ def get_model(cellaap_widget):
         "ViTbFocal-1.8": "doi:10.5281/zenodo.12585190",
         "ViTb-1.9": "doi:10.5281/zenodo.12627315",
         "ViTlFocal-1.9": "doi:10.5281/zenodo.12700955",
+        "ViTl-1.9": "doi:10.5281/zenodo.13227856"
     }
 
     weights_registry = {
@@ -474,6 +475,10 @@ def get_model(cellaap_widget):
             "model_0043499.pth",
             "md5:ad056dc159ea8fd12f7d5d4562c368a9",
         ),
+        "ViTl-1.9" : (
+            "model_0043499.pth",
+            "md5:7164f30afee5c3f15ff752e97d6dba9f"
+        )
     }
 
     configs_registry = {
@@ -498,6 +503,11 @@ def get_model(cellaap_widget):
             "md5:809bc09220a8dea515c58e2ddb3cfe77",
             "lazy",
         ),
+        "ViTl-1.9" : (
+            "config.yaml",
+            "md5:0b1708daa89136f9c85afa2aa8a19817",
+            "lazy"
+        )
     }
 
     model = pooch.create(

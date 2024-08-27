@@ -1,5 +1,5 @@
 import skimage
-import cell_AAP.annotation.annotation_utils as au
+import cell_AAP.annotation.annotation_utils as au #type: ignore
 
 "Standard Configurations for HeLa cell data"
 
@@ -31,6 +31,7 @@ _HELA["PROPSLIST"] = [
 _HELA["FRAMESTEP"] = 1
 _HELA["BOX_SIZE"] = (au.get_box_size, (2.5,))
 _HELA["IOU_THRESH"] = 0.85
+_HELA["BBOX_FUNC"] = (au.square_box)
 _DEFAULT = _HELA
 
 

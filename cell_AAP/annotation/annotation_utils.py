@@ -189,9 +189,49 @@ def get_box_size_scaled(region_props, max_size: float) -> list[float]:
     return np.asarray(bb_side_lengths) // 2
 
 
+
+def square_box(centroid: npt.NDArray, box_size: int | float) -> npt.NDArray:
+    """
+    Draws an upright bounding box given a centroud and box size
+    ------------------------------------------------------------
+
+    INPUTS:
+        centroid: ndarray
+        box_size: Union(int, float)
+    RETURNS:
+        coords: ndarray
+    """
+
+    x, y = centroid[1], centroid[0] # centroid must be of the form (y, x)
+    x1, y1 = x - box_size, y + box_size  # top left
+    x2, y2 = x + box_size, y - box_size  # bottom right
+
+    return np.asarray([x1, y2, x2, y1])
+
+
+
+
 def box_size_wrapper(func, frame_props, args):
+    "Facillitates the usage of different box size determination functions"
+
     try:
         return func(frame_props, *args)
+    except Exception as error:
+        raise AttributeError("args do not match function") from error
+
+
+def bbox_wrapper(func, centroid, box_size: Optional[int | float] = None, args: Optional[list] = None):
+    "Facillitates the usage of different box drawing determination functions"
+
+    try:
+        if box_size and args:
+            return func(centroid, box_size, *args)
+        elif box_size:
+            return func(centroid, box_size)
+        elif args:
+            return func(centroid, *args)
+        else:
+            return func(centroid)
     except Exception as error:
         raise AttributeError("args do not match function") from error
 
@@ -295,6 +335,7 @@ def crop_regions_predict(
     erosionstruct,
     tophatstruct,
     box_size: tuple,
+    bbox_func: tuple,
     point_prompts: bool = True,
     box_prompts: bool = False,
     to_segment: bool = True,
@@ -307,10 +348,11 @@ def crop_regions_predict(
     INPUTS:
            dna_image_stack: n-darray, an asarray of shape (frame_count, x, y) where each (x, y) frame in the first dimension corresponds to one image
            phase_image_stack: n-darray, an asarray of shape (frame_count, x, y) where each (x, y) frame in the first dimension corresponds to one image
-           box_size: 1/2 the side length of boxes to be cropped from the input image
+           box_size: tuple, function and args to be passed to box_size_wrapper
            predictor: SAM, predicitive algorithm for segmenting cells
            threshold_division: float or int
-            sigma: float or int
+           sigma: float or int
+           bbox_func: tuple, function and args to be passed to bbox_wrapper
 
 
     OUTPUTS:
@@ -337,6 +379,12 @@ def crop_regions_predict(
     boxes = []
     box_size_func = box_size[0]
     box_size_args = box_size[1]
+    bbox_draw_func = bbox_func[0]
+    if len(bbox_func) >= 2:
+        bbox_draw_args = bbox_func[1]
+        arg_exists = True
+    else:
+        arg_exists = False
 
     _, dna_image_region_props = preprocess_3d(
         dna_image_stack,
@@ -363,17 +411,23 @@ def crop_regions_predict(
             if isinstance(box_sizes, list):
                 box_sizes = box_sizes[j]
 
-            x1, y1 = x - box_sizes, y + box_sizes  # top left
-            x2, y2 = x + box_sizes, y - box_sizes  # bottom right
-
-            coords_temp = [x1, y2, x2, y1]
+            if arg_exists:
+                coords_temp = bbox_wrapper(bbox_draw_func,
+                                            np.asarray[y, x],
+                                            box_sizes,
+                                            bbox_draw_args)
+            else:
+                coords_temp = bbox_wrapper(bbox_draw_func,
+                                            np.asarray[y, x],
+                                            box_sizes,
+                                            )
 
             if all(k >= 0 and k <= 2048 for k in coords_temp) and all(
                 iou < iou_thresh for iou in iou_with_list(coords_temp, boxes)
             ):  # experimental iou thresholding
 
                 dna_image = Image.fromarray(dna_image_stack[i, :, :])
-                dna_region = np.asarray(dna_image.crop((x1, y2, x2, y1)))
+                dna_region = np.asarray(dna_image.crop(tuple(coords_temp)))
                 dna_regions_temp.append(dna_region)
                 boxes.append(coords_temp)
 

@@ -4,7 +4,7 @@ import tifffile as tiff
 from skimage.measure import regionprops_table
 from annotation_utils import *
 from typing import Optional
-from cell_AAP import configs
+from cell_AAP import configs #type: ignore
 
 
 class Annotator:
@@ -112,6 +112,7 @@ class Annotator:
             self.configs.erosionstruct,
             self.configs.tophatstruct,
             self.configs.box_size,
+            self.configs.bbox_func,
             self.configs.point_prompts,
             self.configs.box_prompts,
             self.to_segment,
