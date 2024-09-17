@@ -33,7 +33,7 @@ def main():
     ]
     well_pairs = []
     for dir in sorted(inference_dirs):
-        well = re.search(r"[A-H]([0][1-9]|[1][1-2])", dir).group() #find the well name of the first inference directory
+        well = re.search(r"[A-H]([1-9]|[0][1-9]|[1][1-2])", dir).group() #find the well name of the first inference directory
         well_pair = [ dir for dir in inference_dirs if well in dir ]
         if well_pair != []:
             well_pairs.append(
@@ -42,10 +42,10 @@ def main():
             inference_dirs = [dir for dir in inference_dirs if dir not in well_pairs[-1]]  #remove the directories added to the list of well pairs
     for pair in well_pairs:
         positions = [re.search(r"[s]\d", pair_entry).group() for pair_entry in pair]
-        well = re.search(r"[A-H]([0][1-9]|[1][1-2])", pair[0]).group()
+        well = re.search(r"[A-H]([1-9]|[0][1-9]|[1][1-2])", pair[0]).group()
         data = []
         for i, pair_entry in enumerate(pair):
-            prefix = str(os.path.split(pair_entry)[-1].split(positions)[i][0]+positions[i])
+            prefix = str(os.path.split(pair_entry)[-1].split(positions[i])[0]+positions[i])
             analysis_path = os.path.join(pair_entry, f"{prefix}_analysis.xlsx")
             analysis_file_validity = os.path.exists(analysis_path)
             if analysis_file_validity:

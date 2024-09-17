@@ -39,7 +39,7 @@ def main():
         if re.search(r"intensity_map\.ti(f|ff)", str(f.path)) != None
     ]
     for home_dir in home_dirs:
-        well = re.search(r"[A-H]([0][1-9]|[1][1-2])", home_dir).group()
+        well = re.search(r"[A-H]([1-9]|[0][1-9]|[1][1-2])", home_dir).group()
         position = re.search(r"[s]\d", home_dir).group()
         prefix = str(os.path.split(home_dir)[-1].split(position)[0]+position)
         home_dir_validity = os.path.exists(home_dir)
