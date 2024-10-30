@@ -236,9 +236,16 @@ def save(cellaap_widget):
             inference_folder_path, analysis_file_prefix + "semantic_movie.tif"
         ),
         inference_result["semantic_movie"],
-        dtype="uint16",
+        dtype="uint8",
     )
 
+    tiff.imwrite(
+        os.path.join(
+            inference_folder_path, analysis_file_prefix + "instance_movie.tif"
+        ),
+        inference_result["instance_movie"],
+        dtype="uint16",
+    )
 
 def add(cellaap_widget: ui.cellAAPWidget):
     "Adds a movie to the batch worker"
