@@ -190,7 +190,7 @@ def get_box_size_scaled(region_props, max_size: float) -> list[float]:
 
 
 
-def square_box(centroid: npt.NDArray, box_size: int | float) -> npt.NDArray:
+def square_box(centroid: npt.NDArray, box_size: float) -> npt.NDArray:
     """
     Draws an upright bounding box given a centroud and box size
     ------------------------------------------------------------
@@ -220,7 +220,7 @@ def box_size_wrapper(func, frame_props, args):
         raise AttributeError("args do not match function") from error
 
 
-def bbox_wrapper(func, centroid, box_size: Optional[int | float] = None, args: Optional[list] = None):
+def bbox_wrapper(func, centroid, box_size: Optional[float] = None, args: Optional[list] = None):
     "Facillitates the usage of different box drawing determination functions"
 
     try:

@@ -460,7 +460,8 @@ def get_model(cellaap_widget):
         "ViTbFocal-1.8": "doi:10.5281/zenodo.12585190",
         "ViTb-1.9": "doi:10.5281/zenodo.12627315",
         "ViTlFocal-1.9": "doi:10.5281/zenodo.12700955",
-        "ViTl-1.9": "doi:10.5281/zenodo.13227856"
+        "ViTl-1.9": "doi:10.5281/zenodo.13227856",
+        "U2OS": "doi:10.5281/zenodo.14056481"
     }
 
     weights_registry = {
@@ -478,6 +479,10 @@ def get_model(cellaap_widget):
         "ViTl-1.9" : (
             "model_0043499.pth",
             "md5:7164f30afee5c3f15ff752e97d6dba9f"
+        ),
+        "U2OS": (
+            "model_0030449.pth",
+            "md5:4d65600b92560d7fcda6c6fd59fa0fe8"
         )
     }
 
@@ -506,6 +511,11 @@ def get_model(cellaap_widget):
         "ViTl-1.9" : (
             "config.yaml",
             "md5:0b1708daa89136f9c85afa2aa8a19817",
+            "lazy"
+        ),
+        "U2OS" : (
+            "config.yaml",
+            "md5:48f0012e525dd72464f343e87581d582",
             "lazy"
         )
     }

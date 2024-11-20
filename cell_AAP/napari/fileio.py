@@ -86,7 +86,7 @@ def grab_file(cellaap_widget: ui.cellAAPWidget, attribute: str):
         caption="Select file(s)",
         directory=os.getcwd(),
         filter=file_filter,
-    )
+    ) #type:ignore
 
     match attribute.split():
         case ["full_spectrum"]:
@@ -236,7 +236,7 @@ def save(cellaap_widget):
             inference_folder_path, analysis_file_prefix + "semantic_movie.tif"
         ),
         inference_result["semantic_movie"],
-        dtype="uint8",
+        dtype="uint16",
     )
 
     tiff.imwrite(
