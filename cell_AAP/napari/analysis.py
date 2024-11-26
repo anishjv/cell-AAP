@@ -68,6 +68,7 @@ def track(
             "orientation",
             "solidity",
             "intensity_mean",
+            "intensity_mean",
         ]
 
     if intensity_movie.shape[1] != instance_movie.shape[1]:
@@ -88,16 +89,20 @@ def track(
         num_workers=1,
     )
 
-    for object in objects:
+    for i, object in enumerate(objects):
         if object.properties["class_id"] % 2 == 0:
             object.properties["class_id"] = 0
         else:
             object.properties["class_id"] = 1
+        if object.properties['area'] < 500:
+                objects.pop(i)
+        if object.properties['solidity'] < 0.90:
+            objects.pop(i)
 
     with btrack.BayesianTracker() as tracker:
 
         tracker.configure(config_file)
-        tracker.max_search_radius = 25
+        tracker.max_search_radius = 10
         tracker.tracking_updates = ["MOTION", "VISUAL"]
         tracker.features = features
 

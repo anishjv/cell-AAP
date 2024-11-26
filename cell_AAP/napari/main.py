@@ -571,7 +571,7 @@ def color_masks(
                         seg_labeled[mask] += custom_dict[j]
 
             else:
-                mask = binary_erosion(mask, disk(3))
+                #mask = binary_erosion(mask, disk(3)) with this removed btrack tracking is deprecated.
                 if labels[i] == 0:
                     seg_labeled[mask] = 2 * i
                 else:
@@ -591,7 +591,6 @@ def disp_inf_results(cellaap_widget) -> None:
             cellaap_widget.inference_cache,
         )
     )[0]
-
 
     cellaap_widget.viewer.add_labels(
         result['semantic_movie'],
