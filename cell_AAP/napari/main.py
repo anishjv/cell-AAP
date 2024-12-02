@@ -20,12 +20,12 @@ from skimage.morphology import binary_erosion, disk
 import pooch
 
 sys.path.insert(0, "/Users/whoisv/detectron2_focal/")
-from detectron2_loc.utils.logger import setup_logger
-from detectron2_loc.engine import DefaultPredictor
-from detectron2_loc.engine.defaults import create_ddp_model
-from detectron2_loc.config import get_cfg
-from detectron2_loc.checkpoint import DetectionCheckpointer
-from detectron2_loc.config import LazyConfig, instantiate
+from detectron2.utils.logger import setup_logger
+from detectron2.engine import DefaultPredictor
+from detectron2.engine.defaults import create_ddp_model
+from detectron2.config import get_cfg
+from detectron2.checkpoint import DetectionCheckpointer
+from detectron2.config import LazyConfig, instantiate
 from qtpy import QtWidgets, _warn_old_minor_version
 import timm
 from typing import Optional
@@ -125,7 +125,7 @@ def create_batch_widget(batch: Optional[bool] = True) -> ui.cellAAPWidget:
 
 def inference(
     cellaap_widget: ui.cellAAPWidget, img: np.ndarray, frame_num: Optional[int] = None
-) -> tuple[np.ndarray, np.ndarray, list, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, list, np.ndarray, np.ndarray]:
     """
     Runs the actual inference -> Detectron2 -> masks
     ------------------------------------------------
@@ -150,11 +150,20 @@ def inference(
 
     segmentations = output["instances"].pred_masks.to("cpu")
     labels = output["instances"].pred_classes.to("cpu")
+    scores = output["instances"].scores.to("cpu").numpy()
+    classes = output['instances'].pred_classes.to("cpu").numpy()
+    confidence = np.vstack(
+        (scores, classes)
+    )
 
     seg_fordisp = color_masks(
         segmentations, labels, method="custom", custom_dict={0: 1, 1: 100}
     )
-    seg_fortracking = color_masks(segmentations, labels, method="random")
+
+    if cellaap_widget.analyze_check_box.isChecked():
+        seg_fortracking = color_masks(segmentations, labels, method="random", erode = True)
+    else:
+        seg_fortracking = color_masks(segmentations, labels, method="random")
 
     centroids = []
     for i, _ in enumerate(labels):
@@ -165,7 +174,7 @@ def inference(
 
         centroids.append(centroid)
 
-    return seg_fordisp, seg_fortracking, centroids, img
+    return seg_fordisp, seg_fortracking, centroids, img, confidence
 
 
 def run_inference(cellaap_widget: ui.cellAAPWidget):
@@ -178,6 +187,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
     prog_count = 0
     instance_movie = []
     semantic_movie = []
+    confidences = []
     points = ()
 
     try:
@@ -211,12 +221,13 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             frame += cellaap_widget.range_slider.value()[0]
             cellaap_widget.progress_bar.setValue(prog_count)
             img = au.bw_to_rgb(im_array[frame])
-            semantic_seg, instance_seg, centroids, img = inference(
+            semantic_seg, instance_seg, centroids, img, confidence= inference(
                 cellaap_widget, img, frame - cellaap_widget.range_slider.value()[0]
             )
             movie.append(img)
             semantic_movie.append(semantic_seg.astype("uint16"))
             instance_movie.append(instance_seg.astype("uint16"))
+            confidences.append(confidence)
             if len(centroids) != 0:
                 points += (centroids,)
 
@@ -224,9 +235,10 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
         prog_count += 1
         cellaap_widget.progress_bar.setValue(prog_count)
         img = au.bw_to_rgb(im_array)
-        semantic_seg, instance_seg, centroids, img = inference(cellaap_widget, img)
+        semantic_seg, instance_seg, centroids, img, confidence= inference(cellaap_widget, img)
         semantic_movie.append(semantic_seg.astype("uint16"))
         instance_movie.append(instance_seg.astype("uint16"))
+        confidences.append(confidence)
         if len(centroids) != 0:
             points += (centroids,)
 
@@ -271,6 +283,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             "semantic_movie": semantic_movie,
             "instance_movie": instance_movie,
             "centroids": points_array,
+            "confidence": confidences
         }
     )
 
@@ -455,30 +468,14 @@ def get_model(cellaap_widget):
     model_name = cellaap_widget.model_selector.currentText()
 
     url_registry = {
-        "ResNet-1.8": "doi:10.5281/zenodo.11387359",
-        "ViTb-1.8": "doi:10.5281/zenodo.11951629",
-        "ViTbFocal-1.8": "doi:10.5281/zenodo.12585190",
-        "ViTb-1.9": "doi:10.5281/zenodo.12627315",
-        "ViTlFocal-1.9": "doi:10.5281/zenodo.12700955",
-        "ViTl-1.9": "doi:10.5281/zenodo.13227856",
-        "U2OS": "doi:10.5281/zenodo.14056481"
+        "HeLa": "doi:10.5281/zenodo.14226948",
+        "U2OS": "doi:10.5281/zenodo.14226985"
     }
 
     weights_registry = {
-        "ResNet-1.8": ("model_0004999.pth", "md5:8cccf01917e4f04e4cfeda0878bc1f8a"),
-        "ViTb-1.8": ("model_0008399.pth", "md5:9dd789fab740d976c27f9d179128629d"),
-        "ViTbFocal-1.8": (
-            "model_0014699.pth",
-            "md5:36fd39cf3b053d9e540403fb0e9ca2c7",
-        ),
-        "ViTb-1.9": ("model_0019574.pth", "md5:0417118a914ad279c827faf6e6d8ddcb"),
-        "ViTlFocal-1.9": (
+        "HeLa": (
             "model_0043499.pth",
             "md5:ad056dc159ea8fd12f7d5d4562c368a9",
-        ),
-        "ViTl-1.9" : (
-            "model_0043499.pth",
-            "md5:7164f30afee5c3f15ff752e97d6dba9f"
         ),
         "U2OS": (
             "model_0030449.pth",
@@ -487,35 +484,14 @@ def get_model(cellaap_widget):
     }
 
     configs_registry = {
-        "ResNet-1.8": ("config.yaml", "md5:cf1532e9bc0ed07285554b1e28f942de", "yacs"),
-        "ViTb-1.8": (
-            "config.yml",
-            "md5:0d2c6dd677ff7bcda80e0e297c1b6766",
-            "lazy",
-        ),
-        "ViTbFocal-1.8": (
-            "vitb_bin_focal.yaml",
-            "md5:bcd2efa5ffa1d8fa3ba12a1cb2d187fd",
-            "lazy",
-        ),
-        "ViTb-1.9": (
-            "vitb_1.9.yaml",
-            "md5:aab66adc5a1b3f126c96c01fac5e8b4d",
-            "lazy",
-        ),
-        "ViTlFocal-1.9": (
-            "vitl_focal_1.9.yaml",
-            "md5:809bc09220a8dea515c58e2ddb3cfe77",
-            "lazy",
-        ),
-        "ViTl-1.9" : (
+        "HeLa": (
             "config.yaml",
-            "md5:0b1708daa89136f9c85afa2aa8a19817",
-            "lazy"
+            "md5:319ec68250d7ae499a274f7c4f151513",
+            "lazy",
         ),
         "U2OS" : (
             "config.yaml",
-            "md5:48f0012e525dd72464f343e87581d582",
+            "md5:ad80d579860c53a84ab076c4db2604fd",
             "lazy"
         )
     }
@@ -541,6 +517,7 @@ def color_masks(
     labels,
     method: Optional[str] = "random",
     custom_dict: Optional[dict[int, int]] = None,
+    erode = False
 ) -> np.ndarray:
     """
     Takes an array of segmentation masks and colors them by some pre-defined metric. If metric is not given masks are colored randomely
@@ -571,7 +548,8 @@ def color_masks(
                         seg_labeled[mask] += custom_dict[j]
 
             else:
-                #mask = binary_erosion(mask, disk(3)) with this removed btrack tracking is deprecated.
+                if erode == True:
+                    mask = binary_erosion(mask, disk(3))
                 if labels[i] == 0:
                     seg_labeled[mask] = 2 * i
                 else:

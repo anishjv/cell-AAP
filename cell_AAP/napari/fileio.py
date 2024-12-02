@@ -176,6 +176,16 @@ def save(cellaap_widget):
     os.mkdir(inference_folder_path)
 
     instance_movie = np.asarray(inference_result["instance_movie"])
+
+    confidence_list = []
+    for i, pair in enumerate(inference_result['confidence']):
+        confidence_list.append(pd.DataFrame(pair, index=[f'scores_{i}', f'classes_{i}']))
+
+    confidence_df = pd.concat(confidence_list)
+    confidence_df.to_excel(
+        os.path.join(inference_folder_path, analysis_file_prefix + "analysis.xlsx"), sheet_name = "confidence"
+    )
+
     if cellaap_widget.analyze_check_box.isChecked():
         try:
             intensity_movie_path, intensity_movie = image_select(
