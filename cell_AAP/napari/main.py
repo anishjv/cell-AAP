@@ -19,7 +19,6 @@ from skimage.filters import gaussian
 from skimage.morphology import binary_erosion, disk
 import pooch
 
-sys.path.insert(0, "/Users/whoisv/detectron2_focal/")
 from detectron2.utils.logger import setup_logger
 from detectron2.engine import DefaultPredictor
 from detectron2.engine.defaults import create_ddp_model
@@ -125,7 +124,7 @@ def create_batch_widget(batch: Optional[bool] = True) -> ui.cellAAPWidget:
 
 def inference(
     cellaap_widget: ui.cellAAPWidget, img: np.ndarray, frame_num: Optional[int] = None
-) -> tuple[np.ndarray, np.ndarray, list, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, list, np.ndarray, np.ndarray, np.ndarray]:
     """
     Runs the actual inference -> Detectron2 -> masks
     ------------------------------------------------
@@ -152,9 +151,6 @@ def inference(
     labels = output["instances"].pred_classes.to("cpu")
     scores = output["instances"].scores.to("cpu").numpy()
     classes = output['instances'].pred_classes.to("cpu").numpy()
-    confidence = np.vstack(
-        (scores, classes)
-    )
 
     seg_fordisp = color_masks(
         segmentations, labels, method="custom", custom_dict={0: 1, 1: 100}
@@ -174,7 +170,7 @@ def inference(
 
         centroids.append(centroid)
 
-    return seg_fordisp, seg_fortracking, centroids, img, confidence
+    return seg_fordisp, seg_fortracking, centroids, img, scores, classes
 
 
 def run_inference(cellaap_widget: ui.cellAAPWidget):
@@ -187,7 +183,8 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
     prog_count = 0
     instance_movie = []
     semantic_movie = []
-    confidences = []
+    scores_list = []
+    classes_list =[]
     points = ()
 
     try:
@@ -221,13 +218,14 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             frame += cellaap_widget.range_slider.value()[0]
             cellaap_widget.progress_bar.setValue(prog_count)
             img = au.bw_to_rgb(im_array[frame])
-            semantic_seg, instance_seg, centroids, img, confidence= inference(
+            semantic_seg, instance_seg, centroids, img, scores, classes= inference(
                 cellaap_widget, img, frame - cellaap_widget.range_slider.value()[0]
             )
             movie.append(img)
             semantic_movie.append(semantic_seg.astype("uint16"))
             instance_movie.append(instance_seg.astype("uint16"))
-            confidences.append(confidence)
+            scores_list.append(scores)
+            classes_list.append(classes)
             if len(centroids) != 0:
                 points += (centroids,)
 
@@ -235,10 +233,11 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
         prog_count += 1
         cellaap_widget.progress_bar.setValue(prog_count)
         img = au.bw_to_rgb(im_array)
-        semantic_seg, instance_seg, centroids, img, confidence= inference(cellaap_widget, img)
+        semantic_seg, instance_seg, centroids, img, scores, classes= inference(cellaap_widget, img)
         semantic_movie.append(semantic_seg.astype("uint16"))
         instance_movie.append(instance_seg.astype("uint16"))
-        confidences.append(confidence)
+        scores_list.append(scores)
+        classes_list.append(classes)
         if len(centroids) != 0:
             points += (centroids,)
 
@@ -248,6 +247,8 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
     semantic_movie = np.asarray(semantic_movie)
     instance_movie = np.asarray(instance_movie)
     points_array = np.vstack(points)
+    scores_array = np.concatenate(scores_list, axis =0)
+    classes_array = np.concatenate(classes_list, axis =0)
 
     cache_entry_name = f"{name}_{model_name}_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}"
     if cellaap_widget.batch == False:
@@ -283,7 +284,8 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             "semantic_movie": semantic_movie,
             "instance_movie": instance_movie,
             "centroids": points_array,
-            "confidence": confidences
+            "scores": scores_array,
+            "classes": classes_array
         }
     )
 
