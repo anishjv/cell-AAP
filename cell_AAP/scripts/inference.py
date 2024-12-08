@@ -209,7 +209,16 @@ def inference(
     Runs the actual inference -> Detectron2 -> masks
     ------------------------------------------------
     INPUTS:
-        cellaap_widget: instance of ui.cellAAPWidget()
+        container: dict, surogate object for cell_aap_widget,
+        img: np.ndarray, image to run inference on,
+        frame_num: int, frame number to keep track of cenroids,
+        analyze, bool, whether or not to analyze results
+    OUTPUTS:
+        seg_fordisp: np.ndarray, semantic segmentation,
+        sef_fortracking: np.ndarray, instance segmentation
+        centroids: np.ndarray,
+        img: list[np.ndarray], original image,
+        confidence: np.ndarray
     """
 
     if container['model_type'] == "yacs":
