@@ -5,11 +5,11 @@ Utilities for the semi-automated generation of instance segmentation annotations
 
 Supported cell lines currently include:
 1. HeLa
+2. U2OS
 
 In development cell lines currently include:
-1. U2OS
-2. HT1080
-3. Yeast
+1. HT1080
+2. RPE1
 
 We've developed a napari application for the usage of this pre-trained network and propose a transfer learning schematic for the handling of new cell lines. 
 
@@ -22,10 +22,10 @@ If a conda distribution has been installed:
 
 1. Create and activate a clean environment 
 
-        conda create -n cell-aap-env
+        conda create -n cell-aap-env python=3.11.0
         conda activate cell-app-env
 
-2. Within this enviroment install pip
+2. Within this environment install pip
 
         conda install pip
 
@@ -52,7 +52,7 @@ If a conda distribution has been installed:
 
 # Configs Best Practices
 
-If running inference on large volumes of data, i.e. timeseries data >= 300 MB in size, we recommed to procceed in the following manner. 
+If running inference on large volumes of data, i.e. timeseries data >= 300 MB in size, we recommend to proceed in the following manner. 
 
 1. Assemble a small, < 100 MB, substack of your data using python or a program like [ImageJ](https://imagej.net/ij/download.html)
 2. Use this substack to find the optimal parameters for your data, (Number of Cells, Confidence)
@@ -63,19 +63,14 @@ Note: Finding the optimal set of parameters requires some trial and error, to as
 | Classifications $\Downarrow$ Detections $\Rightarrow$ | **Too few**                            | **Too many**                             |
 |----------------------------|----------------------------------------|------------------------------------------|
 | **Dropping M-phase**       | Confidence $\Downarrow$ <br> Number of Cells $\Uparrow$ | Confidence $\Downarrow$ <br> Number of cells $\Downarrow$ |
-| **Missclasifying M-phase** | Confidence $\Uparrow$ <br> Number of Cells $\Uparrow$   | Confidence $\Uparrow$ <br> Number of Cells $\Downarrow$   |
+| **Misclasifying M-phase** | Confidence $\Uparrow$ <br> Number of Cells $\Uparrow$   | Confidence $\Uparrow$ <br> Number of Cells $\Downarrow$   |
 
 
-# Intepreting Results 
+# Interpreting Results 
 
 Once inference is complete the following colors indicate class prediction
 - Red: Non-mitotic
 - Blue: Mitotic
-- Purple: Interclass double prediction
-
-Note: Interclass double predictions are often early prophase cells that the network is not "confident" in, to mitigate such predictions increase the minimum confidence threshold. This will typically result in most double predictions regressing to the Non-mitotic class. 
-
-
 
 
 
