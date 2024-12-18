@@ -69,11 +69,7 @@ def create_cellAAP_widget(batch: Optional[bool] = False) -> ui.cellAAPWidget:
     )
 
     cellaap_widget.image_selector.clicked.connect(
-        lambda: fileio.grab_file(cellaap_widget, attribute="full_spectrum")
-    )
-
-    cellaap_widget.flourescent_image_selector.clicked.connect(
-        lambda: fileio.grab_file(cellaap_widget, attribute="flouro")
+        lambda: fileio.grab_file(cellaap_widget)
     )
 
     cellaap_widget.path_selector.clicked.connect(
@@ -108,13 +104,6 @@ def create_batch_widget(batch: Optional[bool] = True) -> ui.cellAAPWidget:
 
     cellaap_widget.path_selector.clicked.connect(
         lambda: fileio.grab_directory(cellaap_widget)
-    )
-
-    cellaap_widget.flouro_media_blank.clicked.connect(
-        lambda: fileio.grab_file(cellaap_widget, attribute="flouro_blank")
-    )
-    cellaap_widget.trans_media_blank.clicked.connect(
-        lambda: fileio.grab_file(cellaap_widget, attribute="trans_blank")
     )
 
     cellaap_widget.results_display.clicked.connect(lambda: disp_inf_results(cellaap_widget))
@@ -156,10 +145,7 @@ def inference(
         segmentations, labels, method="custom", custom_dict={0: 1, 1: 100}
     )
 
-    if cellaap_widget.analyze_check_box.isChecked():
-        seg_fortracking = color_masks(segmentations, labels, method="random", erode = True)
-    else:
-        seg_fortracking = color_masks(segmentations, labels, method="random")
+    seg_fortracking = color_masks(segmentations, labels, method="random")
 
     centroids = []
     for i, _ in enumerate(labels):
@@ -188,7 +174,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
     points = ()
 
     try:
-        name, im_array = fileio.image_select(cellaap_widget, attribute="full_spectrum")
+        name, im_array = fileio.image_select(cellaap_widget)
         name = name.replace(".", "/").split("/")[-2]
     except AttributeError:
         napari.utils.notifications.show_error("No Image has been selected")
@@ -298,104 +284,12 @@ def batch_inference(cellaap_widget: ui.cellAAPWidget):
         cellapp_widget: instance of ui.cellAAPWidget()
     """
 
-    # sort files in cellaapwidget.file_list into tuples of (full_spec, flouro)
-    full_spec_naming_conv = cellaap_widget.full_spec_format.text()
-    flouro_naming_conv = cellaap_widget.flouro_format.text()
-
-    full_spec_file_prefixes = [
-        file.split(full_spec_naming_conv)[0]
-        for file in cellaap_widget.full_spectrum_files
-    ]
-
-    full_spec_file_suffix = cellaap_widget.full_spectrum_files[0].split(
-        full_spec_naming_conv
-    )[1]
-
-    cellaap_widget.flouro_files = [
-        prefix + flouro_naming_conv + full_spec_file_suffix
-        for prefix in full_spec_file_prefixes
-    ]
-    flouro_file_prefixes = [
-        file.split(flouro_naming_conv)[0] for file in cellaap_widget.flouro_files
-    ]
-
-    existing_flouro_files = [
-        path for path in cellaap_widget.flouro_files if os.path.exists(path)
-    ]
-    non_existing_files = set(existing_flouro_files).symmetric_difference(
-        cellaap_widget.flouro_files
-    )
-
-    try:
-        assert len(non_existing_files) == 0
-    except AssertionError:
-        raise Exception(f"The file(s) {non_existing_files} do not exist")
-
-    num_movie_pairs = len(cellaap_widget.full_spectrum_files)
+    num_movies = len(cellaap_widget.full_spectrum_files)
     movie_tally = 0
-    while movie_tally < num_movie_pairs:
+    while movie_tally < num_movies:
         run_inference(cellaap_widget)
         fileio.save(cellaap_widget)
         movie_tally += 1
-
-    try:
-        filepath = cellaap_widget.dir_grabber
-    except AttributeError:
-        napari.utils.notifications.show_error(
-            "No Directory has been selected - will save output to current working directory"
-        )
-        filepath = os.getcwd()
-        pass
-
-    inference_result = cellaap_widget.inference_cache[-1]
-    instance_movie = np.asarray(inference_result["instance_movie"])
-
-    if hasattr(cellaap_widget, "flouro_blank"):
-
-        flouro_blank_name, flouro_blank = fileio.image_select(
-            cellaap_widget, attribute="flouro_blank"
-        )
-
-        intensity_file_prefix = flouro_blank_name.split("/")[-1].split(
-            flouro_naming_conv
-        )[0]
-
-        intensity_mapping = analysis.gen_intensitymap(image=flouro_blank)
-
-        if intensity_mapping.shape != instance_movie.shape:
-            intensity_mapping = au.square_reshape(
-                intensity_mapping, instance_movie[0].shape
-            )
-
-        tiff.imwrite(
-            os.path.join(filepath, intensity_file_prefix + "intensity_map.tif"),
-            intensity_mapping,
-        )
-
-    if hasattr(cellaap_widget, "trans_blank"):
-
-        trans_file_name, trans_blank = fileio.image_select(
-            cellaap_widget, attribute="trans_blank"
-        )
-
-        trans_file_prefix = trans_file_name.split("/")[-1].split(flouro_naming_conv)[0]
-
-        background_mapping_resize = []
-        for plane in range(trans_blank.shape[0]):
-            if trans_blank[0].shape != instance_movie[0].shape:
-                mapping = au.square_reshape(trans_blank[plane], instance_movie[0].shape)
-            else:
-                mapping = trans_blank[plane]
-            mapping = gaussian(mapping, sigma=40, preserve_range=True)
-            background_mapping_resize.append(mapping)
-
-        background_mapping = np.asarray(background_mapping_resize)
-
-        tiff.imwrite(
-            os.path.join(filepath, trans_file_prefix + "background_map.tif"),
-            background_mapping.astype("uint16"),
-            dtype="uint16",
-        )
 
 
 def configure(cellaap_widget: ui.cellAAPWidget):

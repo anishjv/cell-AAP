@@ -43,7 +43,6 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         self._add_inf_widgets()
         if batch:
             self._add_batch_widgets()
-            self._add_naming_widgets()
         else:
             self._add_file_widgets()
         self._add_config_widgets()
@@ -84,7 +83,7 @@ class cellAAPWidget(QtWidgets.QScrollArea):
 
         tab = QtWidgets.QWidget()
         tab.setLayout(layout)
-        self._tabs.addTab(tab, "\N{GEAR}" + " Analysis")
+        self._tabs.addTab(tab, "\N{GEAR}" + " Results")
 
     def _add_file_widgets(self):
         "Adds file_widgets which are the output of sub_widgets.create_file_selector_widgets. The aforementioned function outputs -> dict[str: QtWidgets.QWidget]"
@@ -136,21 +135,3 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         widget_holder = QtWidgets.QGroupBox("Batch Worker")
         widget_holder.setLayout(layout)
         self._main_layout.addWidget(widget_holder)
-
-    def _add_naming_widgets(self):
-        "Adds naming convention widgets which are the output of sub_widgets.create_naming_convention_widgets. The aforementioned function outputs -> dict[str: tuple[str, QtWidgets.QWidget]]"
-
-        naming_widgets = sub_widgets.create_naming_convention_widgets()
-        self._widgets.update({key: value[1] for key, value in naming_widgets.items()})
-
-        layout = QtWidgets.QFormLayout()
-        for label, widget in naming_widgets.values():
-            label_widget = QtWidgets.QLabel(label)
-            label_widget.setToolTip(widget.toolTip())
-            layout.addRow(label_widget, widget)
-
-        layout.setLabelAlignment(Qt.AlignLeft)
-
-        widget_holder = QtWidgets.QGroupBox("\u03bb " + "Naming Conventions / Blanks")
-        widget_holder.setLayout(layout)
-        self._main_layout.addWidget(widget_holder, stretch=0)

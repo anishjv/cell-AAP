@@ -1,7 +1,7 @@
 from __future__ import annotations
 from qtpy import QtWidgets
 from superqt import QLabeledRangeSlider
-from typing import Union, Optional
+from typing import Optional
 
 
 def create_file_selector_widgets() -> dict[str, QtWidgets.QWidget]:
@@ -14,17 +14,11 @@ def create_file_selector_widgets() -> dict[str, QtWidgets.QWidget]:
             - path_selector: QtWidgets.QPushButtons (These push buttons connect to a function that creates an instance of QtWidgets.QFileDialog)
     """
 
-    image_selector = QtWidgets.QPushButton("\u03bb" + " ~ Full Spectrum")
+    image_selector = QtWidgets.QPushButton("Select Movie")
     image_selector.setToolTip("Select an image to ultimately run inference on")
     widgets = {"image_selector": image_selector}
 
-    flourescent_image_selector = QtWidgets.QPushButton("\u03bb" + " ~ Flourescent")
-    image_selector.setToolTip(
-        "Optionally select a flourescent image to use for analysis"
-    )
-    widgets["flourescent_image_selector"] = flourescent_image_selector
-
-    display_button = QtWidgets.QPushButton("Display")
+    display_button = QtWidgets.QPushButton("Display Movie")
     display_button.setToolTip("Display selected image")
     widgets["display_button"] = display_button
 
@@ -43,14 +37,11 @@ def create_save_widgets(
             - save_combo_box: QtWidgets.QPushButton
     """
 
-    analyze_check_box = QtWidgets.QCheckBox("Analyze")
-    analyze_check_box.setToolTip(
-        "Check to perform analysis when saving inference results, requires intensity image"
-    )
-    widgets = {"analyze_check_box": analyze_check_box}
+
+
 
     save_combo_box = QtWidgets.QComboBox()
-    widgets["save_combo_box"] = save_combo_box
+    widgets = {"save_combo_box": save_combo_box}
 
     path_selector = QtWidgets.QPushButton("Select Directory")
     path_selector.setToolTip(
@@ -58,7 +49,7 @@ def create_save_widgets(
     )
     widgets["path_selector"] = path_selector
 
-    save_selector = QtWidgets.QPushButton("Save && Analyze")
+    save_selector = QtWidgets.QPushButton("Save Results")
     save_selector.setToolTip("Click to save the inference results")
 
     widgets["save_selector"] = save_selector
@@ -165,34 +156,5 @@ def create_batch_widgets() -> dict[str, QtWidgets.QWidget]:
 
     remove_button = QtWidgets.QPushButton("Remove Movie")
     widgets["remove_button"] = remove_button
-
-    return widgets
-
-
-def create_naming_convention_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
-    """
-    Creates Naming Convention Widgets
-    ------------------------------
-    RETURNS:
-        widgets: dict
-            - full_spec_format: QtWidgets.QLineEdit
-            - flouro_format: QtWidgets.QLineEdit
-    """
-
-    full_spec_format = QtWidgets.QLineEdit()
-    widgets = {
-        "full_spec_format": ("Full Spectrum Naming Convention", full_spec_format)
-    }
-
-    flouro_format = QtWidgets.QLineEdit()
-    widgets["flouro_format"] = ("Flourescence Naming Convention", flouro_format)
-
-    flouro_media_blank = QtWidgets.QPushButton("Select Image")
-    flouro_media_blank.setToolTip("Optional, add a stack of (x, y, z) equal to that of the stack being segmented")
-    widgets["flouro_media_blank"] = ("Flourescence Media Blank", flouro_media_blank)
-
-    trans_media_blank = QtWidgets.QPushButton("Select Image")
-    trans_media_blank.setToolTip("Optional, add a stack of (x, y, z) equal to that of the stack being segmented")
-    widgets["trans_media_blank"] = ("Translucent Media Blank", trans_media_blank)
 
     return widgets

@@ -1,5 +1,6 @@
 import pooch
 import numpy as np
+import re
 from detectron2.engine import DefaultPredictor
 from detectron2.engine.defaults import create_ddp_model
 from detectron2.config import get_cfg
@@ -11,6 +12,8 @@ import cell_AAP.annotation.annotation_utils as au  # type:ignore
 from skimage.morphology import binary_erosion, disk
 import skimage.measure
 import tifffile as tiff
+import os
+import pandas as pd
 
 
 
@@ -22,7 +25,7 @@ def get_model(model_name: str):
         cellaap_widget: instance of ui.cellAAPWidget()I
     """
 
-    models = ['HeLa', 'U2OS']
+    models = ['HeLa', 'U2OS', 'HeLa_o']
     try:
         assert model_name in models
     except AssertionError:
@@ -30,7 +33,8 @@ def get_model(model_name: str):
 
     url_registry = {
         "HeLa": "doi:10.5281/zenodo.14226948",
-        "U2OS": "doi:10.5281/zenodo.14226985"
+        "U2OS": "doi:10.5281/zenodo.14226985",
+        "HeLa_o": "doi:10.5281/zenodo.12585190",
     }
 
     weights_registry = {
@@ -41,6 +45,9 @@ def get_model(model_name: str):
         "U2OS": (
             "model_0030449.pth",
             "md5:4d65600b92560d7fcda6c6fd59fa0fe8"
+        ),
+        "HeLa_o": (
+            
         )
     }
 
@@ -54,6 +61,9 @@ def get_model(model_name: str):
             "config.yaml",
             "md5:ad80d579860c53a84ab076c4db2604fd",
             "lazy"
+        ),
+        "HeLa_o": (
+
         )
     }
 
@@ -76,7 +86,8 @@ def get_model(model_name: str):
 def configure(
     model_name: str,
     confluency_est: int = 2000,
-    conf_threshold: float = 0.3
+    conf_threshold: float = 0.3,
+    save_dir: Optional[bool] = None
 ) -> dict:
 
     """
@@ -137,6 +148,9 @@ def configure(
         DetectionCheckpointer(predictor).load(cfg.train.init_checkpoint)
         predictor.eval()
 
+    if save_dir == None:
+        save_dir = os.getcwd()
+
     print("Configurations successfully saved")
     configured = True
     container.update(
@@ -146,7 +160,9 @@ def configure(
             "model_type": model_type,
             "model_name": model_name,
             "confluency_est": confluency_est,
-            "conf_threshold": conf_threshold
+            "conf_threshold": conf_threshold,
+            "save_dir": save_dir
+
         }
     )
 
@@ -240,9 +256,6 @@ def inference(
     labels = output["instances"].pred_classes.to("cpu")
     scores = output["instances"].scores.to("cpu").numpy()
     classes = output['instances'].pred_classes.to("cpu").numpy()
-    confidence = np.vstack(
-        (scores, classes)
-    )
 
     seg_fordisp = color_masks(
         segmentations, labels, method="custom", custom_dict={0: 1, 1: 100}
@@ -262,7 +275,7 @@ def inference(
 
         centroids.append(centroid)
 
-    return seg_fordisp, seg_fortracking, centroids, img, confidence
+    return seg_fordisp, seg_fortracking, centroids, img, scores, classes
 
 
 def run_inference(container: dict, movie_file: str, interval: list[int]):
@@ -270,7 +283,7 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
     Runs inference on image returned by self.image_select(), saves inference result if save selector has been checked
     ----------------------------------------------------------------------------------------------------------------
     INPUTS:
-        container: dict, surogate object for cell_aap_widget,
+        container: dict, surrogate object for cell_aap_widget,
         movie_file: str, path to movie to run inference on,
         interval: list[int], range of images within movie to run inference on, for example, if the movie contains 89 images [0, 88] is the largest possible interval.
     OUTPUTS:
@@ -279,7 +292,8 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
     prog_count = 0
     instance_movie = []
     semantic_movie = []
-    confidences = []
+    scores_list = []
+    classes_list = []
     points = ()
 
 
@@ -292,7 +306,6 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
         raise Exception(
             "You must configure the model before running inference"
         )
-        return
 
     try:
        assert interval[0] >=0
@@ -313,23 +326,25 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
             prog_count += 1
             frame += interval[0]
             img = au.bw_to_rgb(im_array[frame])
-            semantic_seg, instance_seg, centroids, img, confidence= inference(
+            semantic_seg, instance_seg, centroids, img, scores, classes= inference(
                 container, img, frame - interval[0]
             )
             movie.append(img)
             semantic_movie.append(semantic_seg.astype("uint16"))
             instance_movie.append(instance_seg.astype("uint16"))
-            confidences.append(confidence)
+            scores_list.append(scores)
+            classes_list.append(classes)
             if len(centroids) != 0:
                 points += (centroids,)
 
     elif len(im_array.shape) == 2:
         prog_count += 1
         img = au.bw_to_rgb(im_array)
-        semantic_seg, instance_seg, centroids, img, confidence= inference(container, img)
+        semantic_seg, instance_seg, centroids, img, scores, classes= inference(container, img)
         semantic_movie.append(semantic_seg.astype("uint16"))
         instance_movie.append(instance_seg.astype("uint16"))
-        confidences.append(confidence)
+        scores_list.append(scores)
+        classes_list.append(classes)
         if len(centroids) != 0:
             points += (centroids,)
 
@@ -338,6 +353,8 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
     semantic_movie = np.asarray(semantic_movie)
     instance_movie = np.asarray(instance_movie)
     points_array = np.vstack(points)
+    scores_array = np.concatenate(scores_list, axis =0)
+    classes_array = np.concatenate(classes_list, axis =0)
 
     cache_entry_name = f"{name}_{model_name}_{container['confluency_est']}_{round(container['conf_threshold'], ndigits = 2)}"
 
@@ -347,7 +364,54 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
             "semantic_movie": semantic_movie,
             "instance_movie": instance_movie,
             "centroids": points_array,
-            "confidence": confidences
+            "scores": scores_array,
+            "classes": classes_array
         }
 
     return result
+
+def save(container, result):
+    """
+    Saves and analyzes an inference result
+    """
+
+
+    filepath = container['save_dir']
+    inference_result_name = result['name']
+
+    model_name = container["model_name"]
+    try:
+        position = re.search(r"_s\d_", inference_result_name).group()
+        analysis_file_prefix = inference_result_name.split(position)[0] + position
+    except Exception as error:
+        analysis_file_prefix = inference_result_name.split(model_name)[0]
+
+
+    inference_folder_path = os.path.join(filepath, inference_result_name + "_inference")
+    os.mkdir(inference_folder_path)
+
+    instance_movie = np.asarray(result["instance_movie"])
+    scores = result['scores']
+    classes = result['classes']
+    confidence = np.asarray([scores, classes])
+    confidence_df = pd.DataFrame(confidence.T, columns = ['scores', 'classes'])
+    confidence_df.to_excel(
+        os.path.join(inference_folder_path, analysis_file_prefix + "analysis.xlsx"), sheet_name = "confidence"
+    )
+
+    tiff.imwrite(
+        os.path.join(
+            inference_folder_path, analysis_file_prefix + "semantic_movie.tif"
+        ),
+        result["semantic_movie"],
+        dtype="uint16",
+    )
+
+    tiff.imwrite(
+        os.path.join(
+            inference_folder_path, analysis_file_prefix + "instance_movie.tif"
+        ),
+        result["instance_movie"],
+        dtype="uint16",
+    )
+
