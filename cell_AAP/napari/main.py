@@ -365,7 +365,8 @@ def get_model(cellaap_widget):
 
     url_registry = {
         "HeLa": "doi:10.5281/zenodo.14226948",
-        "U2OS": "doi:10.5281/zenodo.14226985"
+        "U2OS": "doi:10.5281/zenodo.14226985",
+        "HeLa_O": "doi:10.5281/zenodo.14502793"
     }
 
     weights_registry = {
@@ -376,6 +377,10 @@ def get_model(cellaap_widget):
         "U2OS": (
             "model_0030449.pth",
             "md5:4d65600b92560d7fcda6c6fd59fa0fe8"
+        ),
+        "HeLa_O": (
+            "model_final.pth",
+            "md5:d7201b05ad8881c8b496930306ea6071"
         )
     }
 
@@ -388,6 +393,11 @@ def get_model(cellaap_widget):
         "U2OS" : (
             "config.yaml",
             "md5:ad80d579860c53a84ab076c4db2604fd",
+            "lazy"
+        ),
+        "HeLa_O": (
+            "config.yaml",
+            "md5:6f0264cf8aba3703a3cc0c51dbc20111",
             "lazy"
         )
     }

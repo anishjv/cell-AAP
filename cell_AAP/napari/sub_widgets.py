@@ -77,6 +77,7 @@ def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
     model_selector = QtWidgets.QComboBox()
     model_selector.addItem("HeLa")
     model_selector.addItem("U2OS")
+    model_selector.addItem("HeLa_O")
     widgets = {"model_selector": ("Select Model", model_selector)}
 
     thresholder = QtWidgets.QDoubleSpinBox()
