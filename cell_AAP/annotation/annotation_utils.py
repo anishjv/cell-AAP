@@ -190,7 +190,6 @@ def get_box_size_scaled(region_props, max_size: float) -> list[float]:
     return np.asarray(bb_side_lengths) // 2
 
 
-
 def square_box(centroid: npt.NDArray, box_size: float) -> npt.NDArray:
     """
     Draws an upright bounding box given a centroud and box size
@@ -203,13 +202,11 @@ def square_box(centroid: npt.NDArray, box_size: float) -> npt.NDArray:
         coords: ndarray
     """
 
-    x, y = centroid[1], centroid[0] # centroid must be of the form (y, x)
+    x, y = centroid[1], centroid[0]  # centroid must be of the form (y, x)
     x1, y1 = x - box_size, y + box_size  # top left
     x2, y2 = x + box_size, y - box_size  # bottom right
 
     return np.asarray([x1, y2, x2, y1])
-
-
 
 
 def box_size_wrapper(func, frame_props, args):
@@ -221,7 +218,9 @@ def box_size_wrapper(func, frame_props, args):
         raise AttributeError("args do not match function") from error
 
 
-def bbox_wrapper(func, centroid, box_size: Optional[float] = None, args: Optional[list] = None):
+def bbox_wrapper(
+    func, centroid, box_size: Optional[float] = None, args: Optional[list] = None
+):
     "Facillitates the usage of different box drawing determination functions"
 
     try:
@@ -237,8 +236,9 @@ def bbox_wrapper(func, centroid, box_size: Optional[float] = None, args: Optiona
         raise AttributeError("args do not match function") from error
 
 
-
-def iou_with_list(input_list: list[npt.NDArray], iou_thresh: float) -> list[npt.NDArray]:
+def iou_with_list(
+    input_list: list[npt.NDArray], iou_thresh: float
+) -> list[npt.NDArray]:
     """
     Computes the IOU of all combinations of arrays in a list and returns a new list with arrays for which iou > iou_thresh are removed
     -------------------------------------------------------------------------------------------------------------------------------------
@@ -249,37 +249,31 @@ def iou_with_list(input_list: list[npt.NDArray], iou_thresh: float) -> list[npt.
     OUTPUTS:
         input_list: list[npt.NDArray]
     """
-    
-    sorted_list = sorted(
-        input_list, key = lambda x: np.count_nonzero(x == 1)
-    )
-    
-    combinations = list(
-        itertools.combinations(sorted_list, 2)
-    )
-    
+
+    sorted_list = sorted(input_list, key=lambda x: np.count_nonzero(x == 1))
+
+    combinations = list(itertools.combinations(sorted_list, 2))
+
     for combo in combinations:
         combo_1 = combo[0] > 0
         combo_2 = combo[1] > 0
-        
-        combo_1_area = np.count_nonzero(combo_1 == 1) 
+
+        combo_1_area = np.count_nonzero(combo_1 == 1)
         combo_2_area = np.count_nonzero(combo_2 == 1)
-        intersection = np.count_nonzero( np.logical_and( combo_1, combo_2) )
-        iou = intersection/(combo_1_area+combo_2_area-intersection)
-        
+        intersection = np.count_nonzero(np.logical_and(combo_1, combo_2))
+        iou = intersection / (combo_1_area + combo_2_area - intersection)
+
         if iou >= iou_thresh:
             for i, _ in enumerate(input_list):
                 if np.array_equal(input_list[i], combo[0]):
                     input_list.pop(i)
-        
+
     return input_list
-     
 
 
 def predict(
     predictor,
     image,
-    iou_thresh,
     boxes: Optional[list[list]] = None,
     points: Optional[list] = None,
     box_prompts=False,
@@ -332,27 +326,26 @@ def predict(
         for h in range(masks.shape[0]):
             packed_mask = np.packbits(masks[h, 0, :, :], axis=0)
             segmentations.append(packed_mask)
-            
-        segmentations = iou_with_list(segmentations, iou_thresh)
+           
     else:
         segmentations = np.packbits(masks[0, :, :], axis=0)
         
-    return np.array(segmentations)
+    return segmentations
 
 def crop_regions_predict(
     dna_image_stack,
     phase_image_stack,
     predictor,
-    threshold_division : float,
-    sigma : float,
+    threshold_division: float,
+    sigma: float,
     erosionstruct,
     tophatstruct,
-    box_size:tuple,  
+    box_size: tuple,
     point_prompts: bool = True,
     box_prompts: bool = False,
-    to_segment: bool =True,
-    threshold_type:str = 'single',
-    iou_thresh: Optional[bool] = 0.85
+    to_segment: bool = True,
+    threshold_type: str = "single",
+    iou_thresh: Optional[bool] = 0.85,
 ):
     """
     Given a stack of flouresence microscopy images, D, and corresponding phase images, P, returns regions cropped from D and masks from P, for each cell
@@ -383,6 +376,13 @@ def crop_regions_predict(
             "there must be the same number of frames in the dna image and the corresponding phase image"
         ) from error
 
+    try:
+        assert box_prompts != point_prompts
+    except Exception as error:
+        raise AssertionError(
+            "You must use only one of box prompts and point prompts"
+        ) from error
+
     batch_size = 50
     discarded_box_counter = np.array([])
     dna_regions = []
@@ -391,9 +391,16 @@ def crop_regions_predict(
     boxes = []
     box_size_func = box_size[0]
     box_size_args = box_size[1]
-    _, dna_image_region_props = preprocess_3d(dna_image_stack, threshold_division, sigma, threshold_type, erosionstruct, tophatstruct)
+    _, dna_image_region_props = preprocess_3d(
+        dna_image_stack,
+        threshold_division,
+        sigma,
+        threshold_type,
+        erosionstruct,
+        tophatstruct,
+    )
 
-    for i, _ in enumerate(dna_image_region_props):
+    for i, _ in enumerate(dna_image_region_props):  # for each image
 
         frame_props = dna_image_region_props[f"Frame_{i}"]
         box_sizes = box_size_wrapper(box_size_func, frame_props, box_size_args)
@@ -404,7 +411,7 @@ def crop_regions_predict(
         sam_current_image = i
         sam_previous_image = None
 
-        for j, _ in enumerate(dna_image_region_props[f'Frame_{i}']):
+        for j, _ in enumerate(dna_image_region_props[f"Frame_{i}"]):  # for each cell
 
             y, x = frame_props[j].centroid
             if isinstance(box_sizes, list):
@@ -414,61 +421,74 @@ def crop_regions_predict(
             x2, y2 = x + box_sizes, y - box_sizes  # bottom right
 
             coords_temp = [x1, y2, x2, y1]
-            
-            if (
-                all(k >= 0 and k <= dna_image_stack.shape[1] for k in coords_temp)
-            ):
 
-                dna_image = Image.fromarray(dna_image_stack[i, :, :])
-                dna_region = np.asarray(dna_image.crop((x1, y2, x2, y1)))
-                dna_regions_temp.append(dna_region)
-                phs_image = Image.fromarray(phase_image_stack[i, :, :])
-                phs_region = np.asarray(phs_image.crop((x1, y2, x2, y1)))
-                phs_regions_temp.append(phs_region)
-                boxes.append(coords_temp)
+            dna_image = Image.fromarray(dna_image_stack[i, :, :])
+            dna_region = np.asarray(dna_image.crop((x1, y2, x2, y1)))
+            dna_regions_temp.append(dna_region)
+            phs_image = Image.fromarray(phase_image_stack[i, :, :])
+            phs_region = np.asarray(phs_image.crop((x1, y2, x2, y1)))
+            phs_regions_temp.append(phs_region)
 
-                if to_segment == True:
-                    if (
-                        sam_current_image != sam_previous_image
-                        or sam_previous_image == None
+            if to_segment == True:
+                if (
+                    sam_current_image != sam_previous_image
+                    or sam_previous_image == None
+                ):
+                    phase_image_rgb = bw_to_rgb(
+                        phase_image_stack[sam_current_image, :, :]
+                    )
+                    predictor.set_image(phase_image_rgb)
+                    sam_previous_image = sam_current_image
+
+                if box_prompts == True:
+
+                    if all(
+                        k >= 0 and k <= dna_image_stack.shape[1] for k in coords_temp
                     ):
-                        phase_image_rgb = bw_to_rgb(
-                            phase_image_stack[sam_current_image, :, :]
+                        boxes.append(coords_temp)
+                    else:
+                        discarded_box_counter[i] += 1
+
+                    if len(boxes) == batch_size or (j + 1) == len(
+                        dna_image_region_props[f"Frame_{i}"]
+                    ):
+                        masks = predict(
+                            predictor,
+                            phase_image_rgb,
+                            boxes=boxes,
+                            box_prompts=True,
                         )
-                        predictor.set_image(phase_image_rgb)
-                        sam_previous_image = sam_current_image
+                        
+                        for l in range(masks.shape[0]):
+                            segmentations_temp.append(masks[l])
+                        boxes = []
 
-
-                    if box_prompts == True:
-                        if len(boxes) == batch_size or (j + 1) == len(
-                            dna_image_region_props[f"Frame_{i}"]
-                        ):
-                            masks = predict( predictor, phase_image_rgb, iou_thresh, boxes = boxes, box_prompts=True )
-                            for l in range(masks.shape[0]):
-                                segmentations_temp.append(masks[l])
-                            boxes = []
-                    elif point_prompts == True:
-                        points = [x, y]
-                        segmentations_temp.append(predict(
-                            predictor, phase_image_rgb, iou_thresh, points = points, point_prompts=True
-                        ))
-                else:
-                    pass
-                    
-            else:
-                discarded_box_counter[i] += 1
-        
-        
+                elif point_prompts == True:
+                    points = [x, y]
+                    mask = predict(
+                            predictor,
+                            phase_image_rgb,
+                            points=points,
+                            point_prompts=True,
+                        )
+                    segmentations_temp.append(mask)
 
         dna_regions.append(dna_regions_temp)
         phs_regions.append(phs_regions_temp)
+        segmentations_temp = iou_with_list(segmentations_temp, iou_thresh)
         segmentations.append(segmentations_temp)
 
     dna_regions = np.asarray(dna_regions, dtype=object)
-    phs_regions = np.asarray(phs_regions, dtype =object)
+    phs_regions = np.asarray(phs_regions, dtype=object)
     segmentations = np.asarray(segmentations, dtype=object)
 
-    return dna_regions, discarded_box_counter, dna_image_region_props, segmentations, phs_regions
+    return (
+        dna_regions,
+        discarded_box_counter,
+        dna_image_region_props,
+        segmentations,
+        phs_regions,
+    )
 
 
 def counter(
