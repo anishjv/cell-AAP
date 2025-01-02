@@ -14,7 +14,7 @@ class Annotator:
         dna_image_stack,
         phase_image_list,
         phase_image_stack,
-        configs: configs.Cfg,
+        configs:configs.Cfg,
     ):
         self.dna_image_list = dna_image_list
         self.dna_image_stack = dna_image_stack
@@ -23,7 +23,7 @@ class Annotator:
         self.configs = configs
         self.frame_count = self.cell_count = None
         self.cleaned_binary_roi = self.cleaned_scalar_roi = None
-        self.masks = self.roi = self.labels = self.coords = self.segmentations = None
+        self.masks =  self.roi = self.labels = self.coords = self.segmentations = None
         self.cropped = False
         self.df_generated = False
         self.to_segment = True
@@ -32,12 +32,7 @@ class Annotator:
         return "Instance of class, Processor, implemented to process microscopy images into regions of interest"
 
     @classmethod
-    def get(
-        cls,
-        configs: configs.Cfg,
-        dna_image_list: list[str],
-        phase_image_list: list[str],
-    ):
+    def get(cls, configs:configs.Cfg, dna_image_list:list[str], phase_image_list:list[str]):
 
         try:
             assert len(dna_image_list) == len(phase_image_list)
@@ -45,23 +40,42 @@ class Annotator:
             raise AssertionError(
                 "dna_image_list and phase_image_list must be of the same length (number of files)"
             ) from error
-
+        
         frame_step = configs.frame_step
+        
+         
         if len(dna_image_list) > 1:
-            dna_image_stack = [
-                tiff.imread(dna_image_list[i])[0::frame_step, :, :]
-                for i, _ in enumerate(dna_image_list)
-            ]
-            phase_image_stack = [
-                tiff.imread(phase_image_list[i])[0::frame_step, :, :]
-                for i, _ in enumerate(phase_image_list)
-            ]
-            dna_image_stack = np.concatenate(dna_image_stack, axis=0)
-            phase_image_stack = np.concatenate(phase_image_stack, axis=0)
-
+            if (re.search(r"^.+\.(?:(?:[tT][iI][fF][fF]?)|(?:[tT][iI][fF]))$", str(dna_image_list[0]))== None):
+                dna_image_stack = [
+                    cv2.imread(str(dna_image_list[i]), cv2.IMREAD_GRAYSCALE) for i, _ in enumerate(dna_image_list)
+                ]
+                phase_image_stack = [
+                    cv2.imread(str(phase_image_list[i]), cv2.IMREAD_GRAYSCALE) for i, _ in enumerate(phase_image_list)
+                ]
+            else:
+            
+                dna_image_stack = [
+                    tiff.imread(dna_image_list[i])[0::frame_step, :, :] for i,_ in enumerate(dna_image_list)
+                ]
+                phase_image_stack = [
+                    tiff.imread(phase_image_list[i])[0::frame_step, :, :] for i,_ in enumerate(phase_image_list)
+                ]
+            if len(dna_image_stack[0].shape) == 3:
+                dna_image_stack = np.concatenate(dna_image_stack, axis = 0)
+                phase_image_stack = np.concatenate(phase_image_stack, axis = 0)
+                
+            elif len(dna_image_stack[0].shape) == 2:
+                dna_image_stack = np.stack(dna_image_stack, axis = 0)
+                phase_image_stack = np.stack(phase_image_stack, axis = 0)
+                     
+                     
         else:
-            dna_image_stack = tiff.imread(dna_image_list[0])[0::frame_step, :, :]
-            phase_image_stack = tiff.imread(phase_image_list[0])[0::frame_step, :, :]
+            if (re.search(r"^.+\.(?:(?:[tT][iI][fF][fF]?)|(?:[tT][iI][fF]))$", str(dna_image_list[0]))== None):
+                dna_image_stack = cv2.imread(str(dna_image_list[0]), cv2.IMREAD_GRAYSCALE)
+                phase_image_stack = cv2.imread(str(phase_image_list[0]), cv2.IMREAD_GRAYSCALE)
+            else:
+                dna_image_stack = tiff.imread(dna_image_list[0])[0::frame_step, :, :]
+                phase_image_stack = tiff.imread(phase_image_list[0])[0::frame_step, :, :]
 
         return cls(
             dna_image_list,
@@ -77,14 +91,6 @@ class Annotator:
 
     @dna_image_list.setter
     def dna_image_list(self, dna_image_list):
-        for i in dna_image_list:
-            if (
-                re.search(r"^.+\.(?:(?:[tT][iI][fF][fF]?)|(?:[tT][iI][fF]))$", i)
-                == None
-            ):
-                raise ValueError("Image must be a tiff file")
-            else:
-                pass
         self._dna_image_list = dna_image_list
 
     @property
@@ -103,36 +109,32 @@ class Annotator:
             self.discarded_box_counter,
             region_props_stack,
             self.segmentations,
+            self.phs_roi
         ) = crop_regions_predict(
             self.dna_image_stack,
             self.phase_image_stack,
             predictor,
             self.configs.threshold_division,
             self.configs.gaussian_sigma,
-            self.configs.erosionstruct,
+            self.configs.erosionstruct, 
             self.configs.tophatstruct,
             self.configs.box_size,
-            self.configs.bbox_func,
             self.configs.point_prompts,
             self.configs.box_prompts,
             self.to_segment,
             self.configs.threshold_type,
-            self.configs.iou_thresh,
+            self.configs.iou_thresh
         )
 
         self.frame_count, self.cell_count = counter(
             region_props_stack, self.discarded_box_counter
         )
         self.cleaned_binary_roi, self.cleaned_scalar_roi, self.masks = clean_regions(
-            self.roi,
-            self.frame_count,
-            self.cell_count,
-            self.configs.threshold_division,
-            self.configs.gaussian_sigma,
-            self.configs.threshold_type,
+            self.roi, self.frame_count, self.cell_count, self.configs.threshold_division, self.configs.gaussian_sigma, self.configs.threshold_type
         )
         self.cropped = True
         return self
+
 
     def gen_df(self, extra_props):
         """
