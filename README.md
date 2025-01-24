@@ -1,8 +1,7 @@
 # Cellular Annotation & Perception Pipeline
 
-![](https://github.com/anishjv/cell-AAP/images/figure2.png?raw=true)
-![](https://github.com/anishjv/cell-AAP/images/ht1080.png?raw=true)
-![](https://github.com/anishjv/cell-AAP/images/rpe1_u2os.png?raw=true)
+![](https://github.com/anishjv/cell-AAP/blob/main/images/figure2.png?raw=true)
+![](https://github.com/anishjv/cell-AAP/blob/main/images/rpe1_u2os.png?raw=true)
 
 
 
