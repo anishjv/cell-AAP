@@ -459,7 +459,7 @@ def color_masks(
                 if labels[i] == 0:
                     seg_labeled[mask] = 2 * i
                 else:
-                    seg_labeled[mask] = 2 * i - 1
+                    seg_labeled[mask] = 2 * i + 1
 
     return seg_labeled
 

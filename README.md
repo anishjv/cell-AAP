@@ -1,18 +1,25 @@
-# cellular-Automated Annotation Pipeline
-Utilities for the semi-automated generation of instance segmentation annotations to be used for neural network training. Utilities are built ontop of [UMAP](https://github.com/lmcinnes/umap), [HDBSCAN](https://arxiv.org/abs/1911.02282) and a finetuned encoder version of FAIR's [Segment Anything Model](https://github.com/facebookresearch/segment-anything/tree/main?tab=readme-ov-file) developed by Computational Cell Analytics for the project [micro-sam](https://github.com/computational-cell-analytics/micro-sam/tree/master/micro_sam/sam_annotator). In addition to providing utilies for annotation building, we train a network, FAIR's [detectron2](https://github.com/facebookresearch/detectron2) to 
+# Cellular Annotation & Perception Pipeline
+
+![](https://github.com/anishjv/cell-AAP/images/figure2.png?raw=true)
+![](https://github.com/anishjv/cell-AAP/images/ht1080.png?raw=true)
+![](https://github.com/anishjv/cell-AAP/images/rpe1_u2os.png?raw=true)
+
+
+
+
+Utilities for the semi-automated generation of instance segmentation annotations to be used for neural network training. Utilities are built ontop of [UMAP](https://github.com/lmcinnes/umap), [HDBSCAN](https://arxiv.org/abs/1911.02282) and a finetuned encoder version of FAIR's [Segment Anything Model](https://github.com/facebookresearch/segment-anything/tree/main?tab=readme-ov-file) developed by Computational Cell Analytics for the project [micro-sam](https://github.com/computational-cell-analytics/micro-sam/tree/master/micro_sam/sam_annotator). In addition to providing utilies for annotation building, we train networks using FAIR's [detectron2](https://github.com/facebookresearch/detectron2) to 
 1. Demonstrate the efficacy of our utilities. 
 2. Be used for microscopy annotation of supported cell lines 
 
-Supported cell lines currently include:
+Cell-line specific models currently include:
 1. HeLa
 2. U2OS
 
-In development cell lines currently include:
-1. HT1080
-2. RPE1
+Models have demonstrated performance efficacy on:
+1. HT1080 (HeLa model)
+2. RPE1 (U2OS model)
 
-We've developed a napari application for the usage of this pre-trained network and propose a transfer learning schematic for the handling of new cell lines. 
-
+We've also developed a napari application for the usage of these pre-trained networks.
 
 
 # Installation 
@@ -55,15 +62,8 @@ If a conda distribution has been installed:
 If running inference on large volumes of data, i.e. timeseries data >= 300 MB in size, we recommend to proceed in the following manner. 
 
 1. Assemble a small, < 100 MB, substack of your data using python or a program like [ImageJ](https://imagej.net/ij/download.html)
-2. Use this substack to find the optimal parameters for your data, (Number of Cells, Confidence)
+2. Use this substack to find the optimal parameters for your data, (Number of Cells, Network confidence threshold)
 3. Run Inference over the volume using the discovered optimal parameters
-
-Note: Finding the optimal set of parameters requires some trial and error, to assist we've created a table. 
-
-| Classifications $\Downarrow$ Detections $\Rightarrow$ | **Too few**                            | **Too many**                             |
-|----------------------------|----------------------------------------|------------------------------------------|
-| **Dropping M-phase**       | Confidence $\Downarrow$ <br> Number of Cells $\Uparrow$ | Confidence $\Downarrow$ <br> Number of cells $\Downarrow$ |
-| **Misclasifying M-phase** | Confidence $\Uparrow$ <br> Number of Cells $\Uparrow$   | Confidence $\Uparrow$ <br> Number of Cells $\Downarrow$   |
 
 
 # Interpreting Results 
@@ -71,6 +71,15 @@ Note: Finding the optimal set of parameters requires some trial and error, to as
 Once inference is complete the following colors indicate class prediction
 - Red: Non-mitotic
 - Blue: Mitotic
+
+For analysis purposes, masks in the semantic and instance segmentations have the following value mapping:
+Semantic
+- 1: Non-mitotic
+- 100: Mitotic
+
+Instance
+- $2x$: Non-mitotic
+- $2x-1$: Mitotic
 
 
 
