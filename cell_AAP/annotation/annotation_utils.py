@@ -238,7 +238,7 @@ def bbox_wrapper(
 
 def iou_with_list(
     input_list: list[npt.NDArray], iou_thresh: float
-) -> list[npt.NDArray]:
+) -> tuple[list[npt.NDArray], list[int]]:
     """
     Computes the IOU of all combinations of arrays in a list and returns a new list with arrays for which iou > iou_thresh are removed
     -------------------------------------------------------------------------------------------------------------------------------------
@@ -249,11 +249,11 @@ def iou_with_list(
     OUTPUTS:
         input_list: list[npt.NDArray]
     """
-
+    poped_indices = []
     sorted_list = sorted(input_list, key=lambda x: np.count_nonzero(x == 1))
 
     combinations = list(itertools.combinations(sorted_list, 2))
-
+    print(f"input list: {len(input_list)}")
     for combo in combinations:
         combo_1 = combo[0] > 0
         combo_2 = combo[1] > 0
@@ -266,9 +266,12 @@ def iou_with_list(
         if iou >= iou_thresh:
             for i, _ in enumerate(input_list):
                 if np.array_equal(input_list[i], combo[0]):
-                    input_list.pop(i)
+                    poped_indices.append(i)
+    input_list = [seg for i, seg in enumerate(input_list) if i not in poped_indices]
+    print(f"input list: {len(input_list)}")
+    print(f"poped indices:{len(poped_indices)}")
 
-    return input_list
+    return input_list, poped_indices
 
 
 def predict(
@@ -279,11 +282,10 @@ def predict(
     box_prompts=False,
     point_prompts=True,
 ) -> np.ndarray:
-    
-    '''
+    """
     Implementation of FAIR's SAM using box or point prompts:
     --------------------------------------------------------
-    '''
+    """
     segmentations = []
     if box_prompts == True:
 
@@ -304,7 +306,7 @@ def predict(
             boxes=transformed_boxes,
             multimask_output=False,
         )
-        
+
         masks = masks.detach().cpu().numpy()
 
     elif point_prompts == True:
@@ -313,7 +315,7 @@ def predict(
             assert points != None
         except Exception as error:
             raise AssertionError(
-                "Failed to provide input centroids, please select box_prompts = True if attempeting to provide bouding box prompts"
+                "Failed to provide input centroids, please select box_prompts = True if attempting to provide bouding box prompts"
             ) from error
         masks, _, _ = predictor.predict(
             point_coords=np.array([points]),
@@ -326,11 +328,12 @@ def predict(
         for h in range(masks.shape[0]):
             packed_mask = np.packbits(masks[h, 0, :, :], axis=0)
             segmentations.append(packed_mask)
-           
+
     else:
         segmentations = np.packbits(masks[0, :, :], axis=0)
-        
+
     return segmentations
+
 
 def crop_regions_predict(
     dna_image_stack,
@@ -458,7 +461,7 @@ def crop_regions_predict(
                             boxes=boxes,
                             box_prompts=True,
                         )
-                        
+
                         for l in range(masks.shape[0]):
                             segmentations_temp.append(masks[l])
                         boxes = []
@@ -466,17 +469,28 @@ def crop_regions_predict(
                 elif point_prompts == True:
                     points = [x, y]
                     mask = predict(
-                            predictor,
-                            phase_image_rgb,
-                            points=points,
-                            point_prompts=True,
-                        )
+                        predictor,
+                        phase_image_rgb,
+                        points=points,
+                        point_prompts=True,
+                    )
                     segmentations_temp.append(mask)
 
+        segmentations_temp, poped_indices = iou_with_list(
+            segmentations_temp, iou_thresh
+        )
+        segmentations.append(segmentations_temp)
+        print(f"dna regions: {len(dna_regions_temp)}")
+        dna_regions_temp = [
+            roi for i, roi in enumerate(dna_regions_temp) if i not in poped_indices
+        ]
+        phs_regions_temp = [
+            roi for i, roi in enumerate(phs_regions_temp) if i not in poped_indices
+        ]
+        print(f"dna regions: {len(dna_regions_temp)}")
+        discarded_box_counter[i] += len(poped_indices)
         dna_regions.append(dna_regions_temp)
         phs_regions.append(phs_regions_temp)
-        segmentations_temp = iou_with_list(segmentations_temp, iou_thresh)
-        segmentations.append(segmentations_temp)
 
     dna_regions = np.asarray(dna_regions, dtype=object)
     phs_regions = np.asarray(phs_regions, dtype=object)
