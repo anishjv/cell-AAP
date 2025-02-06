@@ -253,7 +253,6 @@ def iou_with_list(
     sorted_list = sorted(input_list, key=lambda x: np.count_nonzero(x == 1))
 
     combinations = list(itertools.combinations(sorted_list, 2))
-    print(f"input list: {len(input_list)}")
     for combo in combinations:
         combo_1 = combo[0] > 0
         combo_2 = combo[1] > 0
@@ -268,8 +267,6 @@ def iou_with_list(
                 if np.array_equal(input_list[i], combo[0]):
                     poped_indices.append(i)
     input_list = [seg for i, seg in enumerate(input_list) if i not in poped_indices]
-    print(f"input list: {len(input_list)}")
-    print(f"poped indices:{len(poped_indices)}")
 
     return input_list, poped_indices
 
@@ -480,14 +477,12 @@ def crop_regions_predict(
             segmentations_temp, iou_thresh
         )
         segmentations.append(segmentations_temp)
-        print(f"dna regions: {len(dna_regions_temp)}")
         dna_regions_temp = [
             roi for i, roi in enumerate(dna_regions_temp) if i not in poped_indices
         ]
         phs_regions_temp = [
             roi for i, roi in enumerate(phs_regions_temp) if i not in poped_indices
         ]
-        print(f"dna regions: {len(dna_regions_temp)}")
         discarded_box_counter[i] += len(poped_indices)
         dna_regions.append(dna_regions_temp)
         phs_regions.append(phs_regions_temp)
