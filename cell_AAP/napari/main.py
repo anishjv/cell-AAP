@@ -366,7 +366,8 @@ def get_model(cellaap_widget):
     url_registry = {
         "HeLa": "doi:10.5281/zenodo.14226948",
         "U2OS": "doi:10.5281/zenodo.14226985",
-        "HeLa_O": "doi:10.5281/zenodo.14502793"
+        "HeLa_oof": "doi:10.5281/zenodo.14853798",
+        "U2OS_new": "doi:10.5281/zenodo.14861677"
     }
 
     weights_registry = {
@@ -378,10 +379,15 @@ def get_model(cellaap_widget):
             "model_0030449.pth",
             "md5:4d65600b92560d7fcda6c6fd59fa0fe8"
         ),
-        "HeLa_O": (
-            "model_final.pth",
-            "md5:d7201b05ad8881c8b496930306ea6071"
+        "HeLa_oof": (
+            "model_0004349.pth",
+            "md5:ac4182e4ae2a1e04ed8b464f32f5fd91"
+        ),
+        "U2OS_new": (
+            "model_0030449.pth",
+            "md5:d701d1007cfc040be5c6e620fd9d17f0"
         )
+
     }
 
     configs_registry = {
@@ -395,9 +401,14 @@ def get_model(cellaap_widget):
             "md5:ad80d579860c53a84ab076c4db2604fd",
             "lazy"
         ),
-        "HeLa_O": (
+        "HeLa_oof": (
             "config.yaml",
-            "md5:6f0264cf8aba3703a3cc0c51dbc20111",
+            "md5:b20065699f593e406fa30d5fa3bc0085",
+            "lazy"
+        ),
+        "U2OS_new": (
+            "config.yaml",
+            "md5:eb68946e8f8a1676b3a7bfc8c235d1db",
             "lazy"
         )
     }
