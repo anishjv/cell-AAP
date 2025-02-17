@@ -32,11 +32,11 @@ def get_model(model_name: str):
         raise Exception(f'Invalid model name selected, model must be one of {models}')
 
     url_registry = {
-        "HeLa": "doi:10.5281/zenodo.14226948",
-        "U2OS": "doi:10.5281/zenodo.14226985",
-        "HeLa_oof": "doi:10.5281/zenodo.14853798",
-        "U2OS_new": "doi:10.5281/zenodo.14879267"
-    }
+    "HeLa": "doi:10.5281/zenodo.14226948",
+    "U2OS": "doi:10.5281/zenodo.14226985",
+    "HeLa_oof": "doi:10.5281/zenodo.14884515",
+    "U2OS_new": "doi:10.5281/zenodo.14879267"
+}
 
     weights_registry = {
         "HeLa": (
@@ -49,7 +49,7 @@ def get_model(model_name: str):
         ),
         "HeLa_oof": (
             "model_0004349.pth",
-            "md5:ac4182e4ae2a1e04ed8b464f32f5fd91"
+            "md5:01ac361196356fe1d7a1fb2c125ad2f5"
         ),
         "U2OS_new": (
             "model_0034799.pth",
@@ -71,7 +71,7 @@ def get_model(model_name: str):
         ),
         "HeLa_oof": (
             "config.yaml",
-            "md5:b20065699f593e406fa30d5fa3bc0085",
+            "md5:eb68946e8f8a1676b3a7bfc8c235d1db",
             "lazy"
         ),
         "U2OS_new": (
