@@ -17,7 +17,7 @@ import pandas as pd
 
 
 
-def get_model(model_name: str):
+def get_model(cellaap_widget):
     """
     Instaniates POOCH instance containing model files from the model_registry
     --------------------------------------------------------------------------
@@ -25,18 +25,15 @@ def get_model(model_name: str):
         cellaap_widget: instance of ui.cellAAPWidget()I
     """
 
-    models = ['HeLa', 'U2OS', 'HeLa_oof', 'U2OS_new']
-    try:
-        assert model_name in models
-    except AssertionError:
-        raise Exception(f'Invalid model name selected, model must be one of {models}')
+    model_name = cellaap_widget.model_selector.currentText()
 
     url_registry = {
-    "HeLa": "doi:10.5281/zenodo.14226948",
-    "U2OS": "doi:10.5281/zenodo.14226985",
-    "HeLa_oof": "doi:10.5281/zenodo.14884515",
-    "U2OS_new": "doi:10.5281/zenodo.14879267"
-}
+        "HeLa": "doi:10.5281/zenodo.14226948",
+        "U2OS": "doi:10.5281/zenodo.14226985",
+        "HeLa_oof": "doi:10.5281/zenodo.14884515",
+        "U2OS_new": "doi:10.5281/zenodo.14969500",
+        "U2OS_l": "doi:10.5281/zenodo.14969500"
+    }
 
     weights_registry = {
         "HeLa": (
@@ -52,6 +49,10 @@ def get_model(model_name: str):
             "md5:01ac361196356fe1d7a1fb2c125ad2f5"
         ),
         "U2OS_new": (
+            "model_0034799.pth",
+            "md5:9a1d6fdf47e3cfbc909a5c9a275b3838"
+        ),
+        "U2OS_l": (
             "model_0034799.pth",
             "md5:9a1d6fdf47e3cfbc909a5c9a275b3838"
         )
@@ -77,6 +78,11 @@ def get_model(model_name: str):
         "U2OS_new": (
             "config.yaml",
             "md5:b20065699f593e406fa30d5fa3bc0085",
+            "lazy"
+        ),
+        "U2OS_l": (
+            "config2.yaml",
+            "md5:18066db05103a9fc38da1b6c05366019",
             "lazy"
         )
     }
