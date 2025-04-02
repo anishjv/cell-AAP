@@ -134,7 +134,7 @@ def write_dataset_ranges(
         os.mkdir(annotation_path)
         
         
-    for l in range(int(max(labeled_data_frame[:, -3]))):
+    for l in range(int(max(labeled_data_frame[:, -3]))+1):
         for m, _ in enumerate(splits):
             if splits[m][0] <= l <= splits[m][1]:
                 os.chdir(
@@ -147,18 +147,17 @@ def write_dataset_ranges(
                     )
                 )
                 
-            image = annotation_utils.binImage(
-            annotation_utils.bw_to_rgb(phase_image_stack[l]), bin_size, bin_method
-            )
-            image = Image.fromarray(image)
-            image.save(f"{l}.jpg")
+                image = annotation_utils.binImage(
+                annotation_utils.bw_to_rgb(phase_image_stack[l]), bin_size, bin_method
+                )
+                image = Image.fromarray(image)
+                image.save(f"{l}.jpg")
 
                      
 
     for j in range(labeled_data_frame.shape[0]):
-        correct_dir = False
         for k, _ in enumerate(splits): #for each specified range
-        
+            correct_dir = False
             if splits[k][0] <= labeled_data_frame[j, -3] <= splits[k][1]: #check if the frame is within the correct range
                 os.chdir(
                     os.path.join(
@@ -194,5 +193,3 @@ def write_dataset_ranges(
                         f"{int(labeled_data_frame[j, -3])}_{label_to_class[2]}_frame{int(labeled_data_frame[j, -3])}cell{int(labeled_data_frame[j, -2])}.png",
                         mask,
                     )
-
-
