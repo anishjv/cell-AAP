@@ -32,7 +32,8 @@ def get_model(cellaap_widget):
         "U2OS": "doi:10.5281/zenodo.14226985",
         "HeLa_oof": "doi:10.5281/zenodo.14884515",
         "U2OS_new": "doi:10.5281/zenodo.14969500",
-        "U2OS_l": "doi:10.5281/zenodo.14969500"
+        "U2OS_l": "doi:10.5281/zenodo.14969500",
+        "U2OS_0.7": "doi:10.5281/zenodo.15162948"
     }
 
     weights_registry = {
@@ -55,6 +56,10 @@ def get_model(cellaap_widget):
         "U2OS_l": (
             "model_0034799.pth",
             "md5:9a1d6fdf47e3cfbc909a5c9a275b3838"
+        ),
+        "U2OS_0.7": (
+            "model_final.pth",
+            "md5:a0ae4412c819f8953fd40bf0aca3c3d0"
         )
 
     }
@@ -83,6 +88,11 @@ def get_model(cellaap_widget):
         "U2OS_l": (
             "config2.yaml",
             "md5:18066db05103a9fc38da1b6c05366019",
+            "lazy"
+        ),
+        "U2OS_0.7": (
+            "config.yaml",
+            "md5:28ff30a8690a15dfbd8f3977d6e11423",
             "lazy"
         )
     }

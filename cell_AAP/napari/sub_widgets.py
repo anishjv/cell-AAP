@@ -80,6 +80,7 @@ def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
     model_selector.addItem("HeLa_oof")
     model_selector.addItem("U2OS_new")
     model_selector.addItem("U2OS_l")
+    model_selector.addItem("U2OS_0.7")
     widgets = {"model_selector": ("Select Model", model_selector)}
 
     thresholder = QtWidgets.QDoubleSpinBox()
