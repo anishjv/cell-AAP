@@ -33,7 +33,8 @@ def get_model(cellaap_widget):
         "HeLa_oof": "doi:10.5281/zenodo.14884515",
         "U2OS_new": "doi:10.5281/zenodo.14969500",
         "U2OS_l": "doi:10.5281/zenodo.14969500",
-        "U2OS_0.7": "doi:10.5281/zenodo.15162948"
+        "U2OS_0.7": "doi:10.5281/zenodo.15162948",
+        "HT1080": "doi:10.5281/zenodo.15231943"
     }
 
     weights_registry = {
@@ -60,6 +61,10 @@ def get_model(cellaap_widget):
         "U2OS_0.7": (
             "model_final.pth",
             "md5:a0ae4412c819f8953fd40bf0aca3c3d0"
+        ),
+        "HT1080": (
+            "model_final.pth",
+            "md5:3ba0e2d1b51dbc9669d9b16b25133406"
         )
 
     }
@@ -94,6 +99,10 @@ def get_model(cellaap_widget):
             "config.yaml",
             "md5:28ff30a8690a15dfbd8f3977d6e11423",
             "lazy"
+        ),
+        "HT1080": (
+            "config.yaml",
+            "md5:2351798dca6bf1470c4095171ca1b86f"
         )
     }
 
@@ -418,15 +427,17 @@ def save(container, result):
 
 
     inference_folder_path = os.path.join(filepath, inference_result_name + "_inference")
-    os.mkdir(inference_folder_path)
+    try:
+        os.mkdir(inference_folder_path)
+    except OSError as error:
+        print("Directory was already present, saving in found directory")
 
-    instance_movie = np.asarray(result["instance_movie"])
     scores = result['scores']
     classes = result['classes']
     confidence = np.asarray([scores, classes])
     confidence_df = pd.DataFrame(confidence.T, columns = ['scores', 'classes'])
     confidence_df.to_excel(
-        os.path.join(inference_folder_path, analysis_file_prefix + "analysis.xlsx"), sheet_name = "confidence"
+        os.path.join(inference_folder_path, analysis_file_prefix + "confidence.xlsx"), sheet_name = "confidence"
     )
 
     tiff.imwrite(
