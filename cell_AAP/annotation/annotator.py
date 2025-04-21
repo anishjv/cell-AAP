@@ -43,7 +43,6 @@ class Annotator:
         
         frame_step = configs.frame_step
         
-         
         if len(dna_image_list) > 1:
             if (re.search(r"^.+\.(?:(?:[tT][iI][fF][fF]?)|(?:[tT][iI][fF]))$", str(dna_image_list[0]))== None):
                 dna_image_stack = [
@@ -55,12 +54,15 @@ class Annotator:
             else:
             
                 dna_image_stack = [
-                    tiff.imread(dna_image_list[i])[0::frame_step, :, :] for i,_ in enumerate(dna_image_list)
+                    tiff.imread(dna_image_list[i]) for i,_ in enumerate(dna_image_list)
                 ]
                 phase_image_stack = [
-                    tiff.imread(phase_image_list[i])[0::frame_step, :, :] for i,_ in enumerate(phase_image_list)
+                    tiff.imread(phase_image_list[i]) for i,_ in enumerate(phase_image_list)
                 ]
+     
             if len(dna_image_stack[0].shape) == 3:
+                dna_image_stack = [movie[0::frame_step, :, :] for movie in dna_image_stack]
+                phs_image_stack = [movie[0::frame_step, :, :] for movie in phs_image_stack]
                 dna_image_stack = np.concatenate(dna_image_stack, axis = 0)
                 phase_image_stack = np.concatenate(phase_image_stack, axis = 0)
                 
