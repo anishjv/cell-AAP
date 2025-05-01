@@ -62,7 +62,7 @@ class Annotator:
      
             if len(dna_image_stack[0].shape) == 3:
                 dna_image_stack = [movie[0::frame_step, :, :] for movie in dna_image_stack]
-                phs_image_stack = [movie[0::frame_step, :, :] for movie in phs_image_stack]
+                phase_image_stack = [movie[0::frame_step, :, :] for movie in phase_image_stack]
                 dna_image_stack = np.concatenate(dna_image_stack, axis = 0)
                 phase_image_stack = np.concatenate(phase_image_stack, axis = 0)
                 
