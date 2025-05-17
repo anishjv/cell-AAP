@@ -17,16 +17,70 @@ import pandas as pd
 
 
 
-def get_model(cellaap_widget):
+def color_masks(
+    segmentations: np.ndarray,
+    labels,
+    method: Optional[str] = "random",
+    custom_dict: Optional[dict[int, int]] = None,
+    erode = False
+) -> np.ndarray:
+    """
+    Takes an array of segmentation masks and colors them by some pre-defined metric. If metric is not given masks are colored randomely
+    -------------------------------------------------------------------------------------------------------------------------------------
+    INPUTS:
+        segmentations: np.ndarray
+        labels: np.ndarray
+        method: str
+        custom_dict: dict
+    OUTPUTS:
+        seg_labeled: np.ndarray
+    """
+    
+    if method == "custom":
+        try:
+            assert custom_dict != None
+            assert np.isin(labels, list(custom_dict.keys())).all() == True
+        except AssertionError:
+            print('Input labels and mapping dictionary did not match when coloring movie, reverting to straight coloring')
+            method = "straight"
+
+    if segmentations.size(dim=0) == 0:
+        seg_labeled = np.zeros(
+            (segmentations.size(dim=1), segmentations.size(dim=2)), dtype="uint8"
+        )
+        return seg_labeled
+
+    seg_labeled = np.zeros_like(segmentations[0], int)
+    for i, mask in enumerate(segmentations):
+        loc_mask = seg_labeled[mask]
+        mask_nonzero = list(filter(lambda x: x != 0, loc_mask))
+        if len(mask_nonzero) < (loc_mask.shape[0] / 4):  # Roughly IOU < 0.5
+
+            if method == "custom":
+                seg_labeled[mask] += custom_dict[labels[i]]
+
+            elif method == "straight":
+                seg_labeled[mask] += labels[i]
+
+            else:
+                if erode == True:
+                    mask = binary_erosion(mask, disk(3))
+                if labels[i] == 0:
+                    seg_labeled[mask] = 2 * i
+                else:
+                    seg_labeled[mask] = 2 * i + 1
+
+    return seg_labeled
+
+
+
+def get_model(model_name:str):
     """
     Instaniates POOCH instance containing model files from the model_registry
     --------------------------------------------------------------------------
     INPUTS:
         cellaap_widget: instance of ui.cellAAPWidget()I
     """
-
-    model_name = cellaap_widget.model_selector.currentText()
-
     url_registry = {
         "HeLa": "doi:10.5281/zenodo.14226948",
         "U2OS": "doi:10.5281/zenodo.14226985",
@@ -208,52 +262,6 @@ def configure(
     return container
 
 
-def color_masks(
-    segmentations: np.ndarray,
-    labels,
-    method: Optional[str] = "random",
-    custom_dict: Optional[dict[int, int]] = None,
-    erode = False
-) -> np.ndarray:
-    """
-    Takes an array of segmentation masks and colors them by some pre-defined metric. If metric is not given masks are colored randomely
-    -------------------------------------------------------------------------------------------------------------------------------------
-    INPUTS:
-        segmentations: np.ndarray
-        labels: list
-        method: str
-        custom_dict: dict
-    OUTPUTS:
-        seg_labeled: np.ndarray
-    """
-
-    if segmentations.size(dim=0) == 0:
-        seg_labeled = np.zeros(
-            (segmentations.size(dim=1), segmentations.size(dim=2)), dtype="uint8"
-        )
-        return seg_labeled
-
-    seg_labeled = np.zeros_like(segmentations[0], int)
-    for i, mask in enumerate(segmentations):
-        loc_mask = seg_labeled[mask]
-        mask_nonzero = list(filter(lambda x: x != 0, loc_mask))
-        if len(mask_nonzero) < (loc_mask.shape[0] / 4):  # Roughly IOU < 0.5
-            if method == "custom" and custom_dict != None:
-                for j in custom_dict.keys():
-                    if labels[i] == j:
-                        seg_labeled[mask] += custom_dict[j]
-
-            else:
-                if erode == True:
-                    mask = binary_erosion(mask, disk(3))
-                if labels[i] == 0:
-                    seg_labeled[mask] = 2 * i
-                else:
-                    seg_labeled[mask] = 2 * i - 1
-
-    return seg_labeled
-
-
 def inference(
     container: dict,
     img: np.ndarray,
@@ -292,13 +300,16 @@ def inference(
             )[0]
 
     segmentations = output["instances"].pred_masks.to("cpu")
-    labels = output["instances"].pred_classes.to("cpu")
+    labels = output["instances"].pred_classes.to("cpu").numpy()
     scores = output["instances"].scores.to("cpu").numpy()
+    scores = (scores*100).astype('uint16')
     classes = output['instances'].pred_classes.to("cpu").numpy()
 
     seg_fordisp = color_masks(
         segmentations, labels, method="custom", custom_dict={0: 1, 1: 100}
     )
+
+    scores_mov = color_masks(segmentations, scores, method="straight")
 
     if analyze:
         seg_fortracking = color_masks(segmentations, labels, method="random", erode = True)
@@ -314,7 +325,7 @@ def inference(
 
         centroids.append(centroid)
 
-    return seg_fordisp, seg_fortracking, centroids, img, scores, classes
+    return seg_fordisp, seg_fortracking, centroids, img, scores_mov, classes
 
 
 def run_inference(container: dict, movie_file: str, interval: list[int]):
@@ -331,7 +342,7 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
     prog_count = 0
     instance_movie = []
     semantic_movie = []
-    scores_list = []
+    scores_movie = []
     classes_list = []
     points = ()
 
@@ -365,13 +376,13 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
             prog_count += 1
             frame += interval[0]
             img = au.bw_to_rgb(im_array[frame])
-            semantic_seg, instance_seg, centroids, img, scores, classes= inference(
+            semantic_seg, instance_seg, centroids, img, scores_mov, classes= inference(
                 container, img, frame - interval[0]
             )
             movie.append(img)
             semantic_movie.append(semantic_seg.astype("uint16"))
             instance_movie.append(instance_seg.astype("uint16"))
-            scores_list.append(scores)
+            scores_movie.append(scores_mov.astype("uint16"))
             classes_list.append(classes)
             if len(centroids) != 0:
                 points += (centroids,)
@@ -379,10 +390,10 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
     elif len(im_array.shape) == 2:
         prog_count += 1
         img = au.bw_to_rgb(im_array)
-        semantic_seg, instance_seg, centroids, img, scores, classes= inference(container, img)
+        semantic_seg, instance_seg, centroids, img, scores_mov, classes= inference(container, img)
         semantic_movie.append(semantic_seg.astype("uint16"))
         instance_movie.append(instance_seg.astype("uint16"))
-        scores_list.append(scores)
+        scores_movie.append(scores_mov.astype("uint16"))
         classes_list.append(classes)
         if len(centroids) != 0:
             points += (centroids,)
@@ -391,8 +402,8 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
 
     semantic_movie = np.asarray(semantic_movie)
     instance_movie = np.asarray(instance_movie)
+    scores_movie = np.asarray(scores_movie) 
     points_array = np.vstack(points)
-    scores_array = np.concatenate(scores_list, axis =0)
     classes_array = np.concatenate(classes_list, axis =0)
 
     cache_entry_name = f"{name}_{model_name}_{container['confluency_est']}_{round(container['conf_threshold'], ndigits = 2)}"
@@ -403,7 +414,7 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
             "semantic_movie": semantic_movie,
             "instance_movie": instance_movie,
             "centroids": points_array,
-            "scores": scores_array,
+            "scores_movie": scores_movie,
             "classes": classes_array
         }
 
@@ -432,6 +443,7 @@ def save(container, result):
     except OSError as error:
         print("Directory was already present, saving in found directory")
 
+    '''
     scores = result['scores']
     classes = result['classes']
     confidence = np.asarray([scores, classes])
@@ -439,6 +451,7 @@ def save(container, result):
     confidence_df.to_excel(
         os.path.join(inference_folder_path, analysis_file_prefix + "confidence.xlsx"), sheet_name = "confidence"
     )
+    '''
 
     tiff.imwrite(
         os.path.join(
@@ -456,3 +469,9 @@ def save(container, result):
         dtype="uint16",
     )
 
+    tiff.imwrite(
+        os.path.join(
+            inference_folder_path, analysis_file_prefix + "scores_movie.tif"
+        ),
+        result["scores_movie"],
+    )

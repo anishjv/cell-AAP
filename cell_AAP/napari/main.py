@@ -137,8 +137,9 @@ def inference(
             )[0]
 
     segmentations = output["instances"].pred_masks.to("cpu")
-    labels = output["instances"].pred_classes.to("cpu")
+    labels = output["instances"].pred_classes.to("cpu").numpy()
     scores = output["instances"].scores.to("cpu").numpy()
+    scores = (scores*100).astype('uint16')
     classes = output['instances'].pred_classes.to("cpu").numpy()
 
     seg_fordisp = color_masks(
@@ -146,6 +147,8 @@ def inference(
     )
 
     seg_fortracking = color_masks(segmentations, labels, method="random")
+
+    seg_scores = color_masks(segmentations, scores, method = "straight")
 
     centroids = []
     for i, _ in enumerate(labels):
@@ -156,7 +159,7 @@ def inference(
 
         centroids.append(centroid)
 
-    return seg_fordisp, seg_fortracking, centroids, img, scores, classes
+    return seg_fordisp, seg_fortracking, centroids, img, seg_scores, classes
 
 
 def run_inference(cellaap_widget: ui.cellAAPWidget):
@@ -169,7 +172,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
     prog_count = 0
     instance_movie = []
     semantic_movie = []
-    scores_list = []
+    scores_movie = []
     classes_list =[]
     points = ()
 
@@ -204,13 +207,13 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             frame += cellaap_widget.range_slider.value()[0]
             cellaap_widget.progress_bar.setValue(prog_count)
             img = au.bw_to_rgb(im_array[frame])
-            semantic_seg, instance_seg, centroids, img, scores, classes= inference(
+            semantic_seg, instance_seg, centroids, img, scores_seg, classes= inference(
                 cellaap_widget, img, frame - cellaap_widget.range_slider.value()[0]
             )
             movie.append(img)
             semantic_movie.append(semantic_seg.astype("uint16"))
             instance_movie.append(instance_seg.astype("uint16"))
-            scores_list.append(scores)
+            scores_movie.append(scores_seg)
             classes_list.append(classes)
             if len(centroids) != 0:
                 points += (centroids,)
@@ -222,7 +225,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
         semantic_seg, instance_seg, centroids, img, scores, classes= inference(cellaap_widget, img)
         semantic_movie.append(semantic_seg.astype("uint16"))
         instance_movie.append(instance_seg.astype("uint16"))
-        scores_list.append(scores)
+        scores_movie.append(scores)
         classes_list.append(classes)
         if len(centroids) != 0:
             points += (centroids,)
@@ -233,7 +236,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
     semantic_movie = np.asarray(semantic_movie)
     instance_movie = np.asarray(instance_movie)
     points_array = np.vstack(points)
-    scores_array = np.concatenate(scores_list, axis =0)
+    scores_movie = np.asarray(scores_movie)
     classes_array = np.concatenate(classes_list, axis =0)
 
     cache_entry_name = f"{name}_{model_name}_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}"
@@ -270,7 +273,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             "semantic_movie": semantic_movie,
             "instance_movie": instance_movie,
             "centroids": points_array,
-            "scores": scores_array,
+            "scores_movie": scores_movie,
             "classes": classes_array
         }
     )
@@ -470,12 +473,20 @@ def color_masks(
     -------------------------------------------------------------------------------------------------------------------------------------
     INPUTS:
         segmentations: np.ndarray
-        labels: list
+        labels: np.ndarray
         method: str
         custom_dict: dict
     OUTPUTS:
         seg_labeled: np.ndarray
     """
+    
+    if method == "custom":
+        try:
+            assert custom_dict != None
+            assert np.isin(labels, list(custom_dict.keys())).all() == True
+        except AssertionError:
+            print('Input labels and mapping dictionary did not match when coloring movie, reverting to straight coloring')
+            method = "straight"
 
     if segmentations.size(dim=0) == 0:
         seg_labeled = np.zeros(
@@ -488,10 +499,12 @@ def color_masks(
         loc_mask = seg_labeled[mask]
         mask_nonzero = list(filter(lambda x: x != 0, loc_mask))
         if len(mask_nonzero) < (loc_mask.shape[0] / 4):  # Roughly IOU < 0.5
-            if method == "custom" and custom_dict != None:
-                for j in custom_dict.keys():
-                    if labels[i] == j:
-                        seg_labeled[mask] += custom_dict[j]
+
+            if method == "custom":
+                seg_labeled[mask] += custom_dict[labels[i]]
+
+            if method == "straight":
+                seg_labeled[mask] += labels[i]
 
             else:
                 if erode == True:
@@ -502,7 +515,6 @@ def color_masks(
                     seg_labeled[mask] = 2 * i + 1
 
     return seg_labeled
-
 
 def disp_inf_results(cellaap_widget) -> None:
 

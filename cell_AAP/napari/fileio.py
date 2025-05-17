@@ -134,6 +134,7 @@ def save(cellaap_widget):
     inference_folder_path = os.path.join(filepath, inference_result_name + "_inference")
     os.mkdir(inference_folder_path)
 
+    '''
     scores = inference_result['scores']
     classes = inference_result['classes']
     confidence = np.asarray([scores, classes])
@@ -141,6 +142,15 @@ def save(cellaap_widget):
     confidence_df.to_excel(
         os.path.join(inference_folder_path, analysis_file_prefix + "analysis.xlsx"), sheet_name = "confidence"
     )
+    '''
+
+    tiff.imwrite(
+        os.path.join(
+            inference_folder_path, analysis_file_prefix + "scores_movie.tif"
+        ),
+        inference_result["scores_movie"],
+    )
+
 
     tiff.imwrite(
         os.path.join(
