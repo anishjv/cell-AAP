@@ -260,6 +260,7 @@ def iou_with_list(
         combo_1_area = np.count_nonzero(combo_1 == 1)
         combo_2_area = np.count_nonzero(combo_2 == 1)
         intersection = np.count_nonzero(np.logical_and(combo_1, combo_2))
+        print(combo_1_area, combo_2, intersection)
         iou = intersection / (combo_1_area + combo_2_area - intersection)
 
         if iou >= iou_thresh:
@@ -278,6 +279,7 @@ def predict(
     points: Optional[list] = None,
     box_prompts=False,
     point_prompts=True,
+    point_labels: Optional[list] = None
 ) -> np.ndarray:
     """
     Implementation of FAIR's SAM using box or point prompts:
@@ -308,6 +310,9 @@ def predict(
 
     elif point_prompts == True:
 
+        if not point_labels:
+            point_labels = np.ones(len(points))
+
         try:
             assert points != None
         except Exception as error:
@@ -315,8 +320,8 @@ def predict(
                 "Failed to provide input centroids, please select box_prompts = True if attempting to provide bouding box prompts"
             ) from error
         masks, _, _ = predictor.predict(
-            point_coords=np.array([points]),
-            point_labels=np.array([1]),
+            point_coords=np.array(points),
+            point_labels=point_labels,
             box=None,
             multimask_output=False,
         )
@@ -459,12 +464,12 @@ def crop_regions_predict(
                             box_prompts=True,
                         )
 
-                        for l in range(masks.shape[0]):
-                            segmentations_temp.append(masks[l])
+                        for mask in masks:
+                            segmentations_temp.append(mask)
                         boxes = []
 
                 elif point_prompts == True:
-                    points = [x, y]
+                    points = [[x, y]]
                     mask = predict(
                         predictor,
                         phase_image_rgb,
@@ -498,6 +503,148 @@ def crop_regions_predict(
         segmentations,
         phs_regions,
     )
+
+
+def crop_regions_predict_exp(
+    dna_image_stack,
+    phase_image_stack,
+    predictor,
+    threshold_division: float,
+    sigma: float,
+    erosionstruct,
+    tophatstruct,
+    box_size: tuple,
+    point_prompts: bool = True,
+    box_prompts: bool = False,
+    to_segment: bool = True,
+    threshold_type: str = "single",
+    iou_thresh: Optional[bool] = 0.85,
+):
+    """
+    Experimental crop_region_predict using negative prompting points
+    """
+    try:
+        assert dna_image_stack.shape[0] == phase_image_stack.shape[0]
+    except Exception as error:
+        raise AssertionError(
+            "there must be the same number of frames in the dna image and the corresponding phase image"
+        ) from error
+
+    try:
+        assert box_prompts != point_prompts
+    except Exception as error:
+        raise AssertionError(
+            "You must use only one of box prompts and point prompts"
+        ) from error
+
+    discarded_box_counter = np.array([])
+    dna_regions = []
+    phs_regions = []
+    segmentations = []
+    box_size_func = box_size[0]
+    box_size_args = box_size[1]
+    _, dna_image_region_props = preprocess_3d(
+        dna_image_stack,
+        threshold_division,
+        sigma,
+        threshold_type,
+        erosionstruct,
+        tophatstruct,
+    )
+
+    for i, _ in enumerate(dna_image_region_props):  # for each image
+
+        frame_props = dna_image_region_props[f"Frame_{i}"]
+        box_sizes = box_size_wrapper(box_size_func, frame_props, box_size_args)
+        dna_regions_temp = []
+        phs_regions_temp = []
+        segmentations_temp = []
+        centrs = []
+        frames = []
+        discarded_box_counter = np.append(discarded_box_counter, 0)
+
+        for j, _ in enumerate(dna_image_region_props[f"Frame_{i}"]):  # for each cell
+
+            y, x = frame_props[j].centroid
+            if isinstance(box_sizes, list):
+                box_sizes = box_sizes[j]
+
+            x1, y1 = x - box_sizes, y + box_sizes  # top left
+            x2, y2 = x + box_sizes, y - box_sizes  # bottom right
+
+            coords_temp = [x1, y2, x2, y1]
+
+            dna_image = Image.fromarray(dna_image_stack[i, :, :])
+            dna_region = np.asarray(dna_image.crop((x1, y2, x2, y1)))
+            dna_regions_temp.append(dna_region)
+            phs_image = Image.fromarray(phase_image_stack[i, :, :])
+            phs_region = np.asarray(phs_image.crop((x1, y2, x2, y1)))
+            phs_regions_temp.append(phs_region)
+
+            centrs.append([x,y])
+            frames.append(i)
+
+        prev_frame = None
+        if to_segment == True:
+            for k, combo in enumerate(zip(centrs, frames)):
+                centr, frame = combo
+                if (
+                    frame != prev_frame
+                    or prev_frame == None
+                ):
+                    phase_image_rgb = bw_to_rgb(
+                        phase_image_stack[frame, :, :]
+                    )
+                    predictor.set_image(phase_image_rgb)
+                    prev_frame = frame
+
+                if point_prompts == True:
+                    centrs_copy = centrs
+                    points = [centr] + centrs[k+1:k+5]
+                    labels = [1] + list(np.zeros(len(centrs[k+1:k+5])).astype('int'))
+                    mask = predict(
+                        predictor,
+                        phase_image_rgb,
+                        points=points,
+                        point_prompts=True,
+                        point_labels=labels
+                    )
+                    print(np.nansum(mask))
+                    segmentations_temp.append(mask)
+
+            segmentations_temp, poped_indices = iou_with_list(
+                segmentations_temp, iou_thresh
+            )
+
+            poped_indices = []
+            segmentations.append(segmentations_temp)
+        else:
+            poped_indices = []
+            segmentations = []
+
+
+        dna_regions_temp = [
+            roi for i, roi in enumerate(dna_regions_temp) if i not in poped_indices
+        ]
+        phs_regions_temp = [
+            roi for i, roi in enumerate(phs_regions_temp) if i not in poped_indices
+        ]
+        discarded_box_counter[i] += len(poped_indices)
+        dna_regions.append(dna_regions_temp)
+        phs_regions.append(phs_regions_temp)
+
+    dna_regions = np.asarray(dna_regions, dtype=object)
+    phs_regions = np.asarray(phs_regions, dtype=object)
+    segmentations = np.asarray(segmentations, dtype=object)
+
+    return (
+        dna_regions,
+        discarded_box_counter,
+        dna_image_region_props,
+        segmentations,
+        phs_regions,
+    )
+
 
 
 def counter(
