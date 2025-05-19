@@ -427,6 +427,12 @@ def crop_regions_predict(
 
             coords_temp = [x1, y2, x2, y1]
 
+            if all(k >= 0 and k <= dna_image_stack.shape[1] for k in coords_temp) == False:
+                continue
+            else:
+                pass
+                
+
             dna_image = Image.fromarray(dna_image_stack[i, :, :])
             dna_region = np.asarray(dna_image.crop((x1, y2, x2, y1)))
             dna_regions_temp.append(dna_region)
