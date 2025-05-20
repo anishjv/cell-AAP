@@ -128,11 +128,8 @@ class Annotator:
             self.configs.iou_thresh
         )
 
-        self.frame_count, self.cell_count = counter(
-            region_props_stack, self.discarded_box_counter
-        )
         self.cleaned_binary_roi, self.cleaned_scalar_roi, self.masks = clean_regions(
-            self.roi, self.frame_count, self.cell_count, self.configs.threshold_division, self.configs.gaussian_sigma, self.configs.threshold_type
+            self.roi, self.configs.threshold_division, self.configs.gaussian_sigma, self.configs.threshold_type
         )
         self.cropped = True
         return self
@@ -145,7 +142,6 @@ class Annotator:
         INPUTS:
             props_list: a list of all the properties (that can be generated from boolean masks) wished to be included in the final dataframe
             intense_props_list: a list of all the properties (that can be generated from scalar values images) wished to be included in the final dataframe
-            frame_count: an int with a value equal to the number of frames in the image stack of interest
             cell_count: list, vector containing one coloumn per frame of the image stack of interest, the value of each key is the number of cells on that frame
             cleaned_regions: list, rank 4 tensor containing cleaned, binary DNA image ROIs, can be indexed as cleaned_regions[mu][nu] where mu represents the frame and nu represents the cell
             cleaned_intensity_regions: list, rank 4 tensor containing cleaned, sclar valued DNA image ROIs, can be indexed in the same manner as cleaned_regions
@@ -172,11 +168,11 @@ class Annotator:
 
         main_df = []
 
-        for i in range(self.frame_count):
-            for j in range(self.cell_count[i]):
-                if self.cleaned_binary_roi[i][j].any() != 0:
+        for i in range(self.cleaned_binary_roi.shape[0]):
+            for j, region in enumerate(self.cleaned_binary_roi[i]):
+                if self.region.any() != 0:
                     props = regionprops_table(
-                        self.cleaned_binary_roi[i][j].astype("uint8"),
+                        region.astype("uint8"),
                         intensity_image=self.cleaned_scalar_roi[i][j],
                         properties=self.configs.propslist,
                         extra_properties=extra_props,

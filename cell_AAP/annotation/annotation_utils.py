@@ -652,37 +652,8 @@ def crop_regions_predict_exp(
     )
 
 
-
-def counter(
-    image_region_props: skimage.measure.regionprops, discarded_box_counter: npt.NDArray
-) -> tuple[float, npt.NDArray]:
-    """
-    Counts the number of cells per frame and number of frames processed through either crop_regions or crop_regions_predict
-    ------------------------------------------------------------------------------------------------------------------------
-    INPUTS:
-      image_region_props: skimage.measure.region_rops, initial region props dictionary generated within the crop_regions function
-      discarded_box_counter: vector of integers corresponding to the number of roi's that had to be discarded due to 'incomplete' bounding boxes
-                             i.e. spilling out of the image. can be indexed as discarded_box_counter[mu] where mu is the frame number
-
-    OUTPUTS:
-      frame_count: int, number of frames in the original image stack
-      cell_count: n-darray, vector containing the number of cropped cells in a given frame, it can be indexed as cell_count[mu] where mu is the frame number
-    """
-
-    frame_count = len(list(image_region_props))
-    cell_count = [
-        int(len(image_region_props[f"Frame_{i}"]) - discarded_box_counter[i])
-        for i in range(frame_count)
-    ]
-
-    cell_count = np.asarray(cell_count)
-    return frame_count, cell_count
-
-
 def clean_regions(
     regions: npt.NDArray,
-    frame_count: float,
-    cell_count: npt.NDArray,
     threshold_division: float,
     sigma: float,
     threshold_type: str = "single",
@@ -705,18 +676,18 @@ def clean_regions(
     cleaned_regions = []
     cleaned_intensity_regions = []
 
-    for i in range(frame_count):
+    for i in range(regions.shape[0]):
         masks_temp = []
         cleaned_regions_temp = []
         cleaned_intensity_regions_temp = []
 
-        for j in range(int(cell_count[i])):
+        for region in regions[i]:
             mask = preprocess_2d(
-                regions[i][j], threshold_division, sigma, threshold_type
+                region, threshold_division, sigma, threshold_type
             )[1]
             cleaned_mask = clear_border(mask)
             cleaned_intensity_regions_temp.append(
-                np.multiply(regions[i][j], cleaned_mask)
+                np.multiply(region, cleaned_mask)
             )
             cleaned_regions_temp.append(label(cleaned_mask))
             masks_temp.append(cleaned_mask)
