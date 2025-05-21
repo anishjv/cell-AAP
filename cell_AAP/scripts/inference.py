@@ -65,7 +65,7 @@ def color_masks(
             else:
                 if erode == True:
                     mask = binary_erosion(mask, disk(3))
-                if labels[i] == 0:
+                elif labels[i] == 0:
                     seg_labeled[mask] = 2 * i
                 else:
                     seg_labeled[mask] = 2 * i + 1
