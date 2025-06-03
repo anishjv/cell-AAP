@@ -9,13 +9,8 @@ import cell_AAP.napari.fileio as fileio  # type: ignore
 import cell_AAP.napari.analysis as analysis  # type: ignore
 
 import numpy as np
-import cv2
-import tifffile as tiff
-import re
-import os
 import torch
 import skimage.measure
-from skimage.filters import gaussian
 from skimage.morphology import binary_erosion, disk
 import pooch
 
@@ -25,10 +20,9 @@ from detectron2.engine.defaults import create_ddp_model
 from detectron2.config import get_cfg
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import LazyConfig, instantiate
-from qtpy import QtWidgets, _warn_old_minor_version
-import timm
 from typing import Optional
-import itertools
+from omegaconf.listconfig import ListConfig
+import torch.serialization
 
 setup_logger()
 
@@ -51,6 +45,13 @@ if not logger.handlers:
 
     logger.addHandler(console_handler)
     logger.setLevel(logging.DEBUG)
+
+
+_original_torch_load = torch.load
+def patched_torch_load(*args, **kwargs):
+    if 'weights_only' not in kwargs:
+        kwargs['weights_only'] = False
+    return _original_torch_load(*args, **kwargs)
 
 
 def create_cellAAP_widget(batch: Optional[bool] = False) -> ui.cellAAPWidget:
@@ -348,7 +349,9 @@ def configure(cellaap_widget: ui.cellAAPWidget):
         predictor = instantiate(cellaap_widget.cfg.model)
         predictor.to(cellaap_widget.cfg.train.device)
         predictor = create_ddp_model(predictor)
+        torch.load = patched_torch_load
         DetectionCheckpointer(predictor).load(cellaap_widget.cfg.train.init_checkpoint)
+        torch.load = _original_torch_load
         predictor.eval()
 
     napari.utils.notifications.show_info(f"Configurations successfully saved")
