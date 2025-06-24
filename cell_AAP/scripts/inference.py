@@ -82,82 +82,103 @@ def get_model(model_name:str):
         cellaap_widget: instance of ui.cellAAPWidget()I
     """
     url_registry = {
-        "HeLa": "doi:10.5281/zenodo.14226948",
-        "U2OS": "doi:10.5281/zenodo.14226985",
-        "HeLa_oof": "doi:10.5281/zenodo.14884515",
-        "U2OS_new": "doi:10.5281/zenodo.14969500",
-        "U2OS_l": "doi:10.5281/zenodo.14969500",
-        "U2OS_0.7": "doi:10.5281/zenodo.15162948",
-        "HT1080": "doi:10.5281/zenodo.15231943"
+        "HeLa_0.1": "doi:10.5281/zenodo.15587924",
+        "HeLa_0.1_focal": "doi:10.5281/zenodo.15587884",
+        "HT1080_focal": "doi:10.5281/zenodo.15632609",
+        "HT1080": "doi:10.5281/zenodo.15632636",
+        "RPE1_focal": "doi:10.5281/zenodo.15632647",
+        "RPE1": "doi:10.5281/zenodo.15632661",
+        "U2OS_focal": "doi:10.5281/zenodo.15632668",
+        "U2OS": "doi:10.5281/zenodo.15632681",
+        "general": "doi:10.5281/zenodo.15707118",
     }
 
     weights_registry = {
-        "HeLa": (
-            "model_0043499.pth",
-            "md5:ad056dc159ea8fd12f7d5d4562c368a9",
+        "HeLa_0.1": (
+            "model_0040499.pth",
+            "md5:62a043db76171f947bfa45c31d7984fe"
         ),
-        "U2OS": (
-            "model_0030449.pth",
-            "md5:4d65600b92560d7fcda6c6fd59fa0fe8"
+        "HeLa_0.1_focal": (
+            "model_0053999.pth",
+            "md5:40eb9490f3b66894abef739c151c5bfe"
         ),
-        "HeLa_oof": (
-            "model_0004349.pth",
-            "md5:01ac361196356fe1d7a1fb2c125ad2f5"
-        ),
-        "U2OS_new": (
-            "model_0034799.pth",
-            "md5:9a1d6fdf47e3cfbc909a5c9a275b3838"
-        ),
-        "U2OS_l": (
-            "model_0034799.pth",
-            "md5:9a1d6fdf47e3cfbc909a5c9a275b3838"
-        ),
-        "U2OS_0.7": (
-            "model_final.pth",
-            "md5:a0ae4412c819f8953fd40bf0aca3c3d0"
+        "HT1080_focal": (
+            "model_0052199.pth",
+            "md5:f454095e8891a694905bd2b12a741274"
         ),
         "HT1080": (
+            "model_0034799.pth",
+            "md5:e5ec71a532d5ad845eb6af37fc785e82"
+        ),
+        "RPE1_focal": (
             "model_final.pth",
-            "md5:3ba0e2d1b51dbc9669d9b16b25133406"
+            "md5:f3cc3196470493bba24b05f49773c00e"
+        ),
+        "RPE1": (
+            "model_0048299.pth",
+            "md5:5d04462ed4d680b85fd5525d8efc0fc9"
+        ),
+        "U2OS_focal": (
+            "model_final.pth",
+            "md5:8fbe8dab57cd96e72537449eb490fa6f"
+        ),
+        "U2OS": (
+            "model_final.pth",
+            "md5:8fbe8dab57cd96e72537449eb490fa6f"
+        ),
+        "general": (
+            "model_0061499.pth",
+            "md5:62e5f4be12227146f6a9841ada46526a"
         )
 
     }
 
     configs_registry = {
-        "HeLa": (
+        "HeLa_0.1": (
             "config.yaml",
-            "md5:319ec68250d7ae499a274f7c4f151513",
-            "lazy",
-        ),
-        "U2OS" : (
-            "config.yaml",
-            "md5:ad80d579860c53a84ab076c4db2604fd",
+            "md5:320852546ed1390ed2e8fa91008e8bf7",
             "lazy"
         ),
-        "HeLa_oof": (
+        "HeLa_0.1_focal": (
             "config.yaml",
-            "md5:eb68946e8f8a1676b3a7bfc8c235d1db",
+            "md5:320852546ed1390ed2e8fa91008e8bf7",
             "lazy"
         ),
-        "U2OS_new": (
+        "HT1080_focal": (
             "config.yaml",
-            "md5:b20065699f593e406fa30d5fa3bc0085",
-            "lazy"
-        ),
-        "U2OS_l": (
-            "config2.yaml",
-            "md5:18066db05103a9fc38da1b6c05366019",
-            "lazy"
-        ),
-        "U2OS_0.7": (
-            "config.yaml",
-            "md5:28ff30a8690a15dfbd8f3977d6e11423",
+            "md5:cea383632378470aa96dc46adac5d645",
             "lazy"
         ),
         "HT1080": (
             "config.yaml",
-            "md5:2351798dca6bf1470c4095171ca1b86f"
+            "md5:71674a29e9d5daf3cc23648539c2d0c6",
+            "lazy"
+        ),
+        "RPE1_focal": (
+            "config.yaml",
+            "md5:78878450ef4805c53b433ff028416510",
+            "lazy"
+        ),
+        "RPE1": (
+            "config.yaml",
+            "md5:9abb7fcafdb953fff72db7642824202a",
+            "lazy"
+        ),
+        "U2OS_focal": (
+            "config.yaml",
+            "md5:ab202fd7e0494fce123783bf564a8cde",
+            "lazy"
+        ),
+        "U2OS": (
+            "config.yaml",
+            "md5:2ab6cd0635b02ad24bcb03371839b807",
+            "lazy"
+        ),
+        "general": (
+            "config.yaml",
+            "md5:ad609c147ea2cd7d7fde0d734de2e166"
         )
+
     }
 
     model = pooch.create(

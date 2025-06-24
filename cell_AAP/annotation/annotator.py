@@ -183,8 +183,4 @@ class Annotator:
                     df = np.append(df, tracker)
                     main_df.append(df)
 
-                else:
-                    self.cell_count[i] -= 1
-                    pass
-
         return np.asarray(main_df)
