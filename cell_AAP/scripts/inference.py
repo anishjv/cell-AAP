@@ -82,8 +82,8 @@ def get_model(model_name:str):
         cellaap_widget: instance of ui.cellAAPWidget()I
     """
     url_registry = {
-        "HeLa_0.1": "doi:10.5281/zenodo.15587924",
-        "HeLa_0.1_focal": "doi:10.5281/zenodo.15587884",
+        "HeLa": "doi:10.5281/zenodo.15587924",
+        "HeLa_focal": "doi:10.5281/zenodo.15587884",
         "HT1080_focal": "doi:10.5281/zenodo.15632609",
         "HT1080": "doi:10.5281/zenodo.15632636",
         "RPE1_focal": "doi:10.5281/zenodo.15632647",
@@ -94,11 +94,11 @@ def get_model(model_name:str):
     }
 
     weights_registry = {
-        "HeLa_0.1": (
+        "HeLa": (
             "model_0040499.pth",
             "md5:62a043db76171f947bfa45c31d7984fe"
         ),
-        "HeLa_0.1_focal": (
+        "HeLa_focal": (
             "model_0053999.pth",
             "md5:40eb9490f3b66894abef739c151c5bfe"
         ),
@@ -134,12 +134,12 @@ def get_model(model_name:str):
     }
 
     configs_registry = {
-        "HeLa_0.1": (
+        "HeLa": (
             "config.yaml",
             "md5:320852546ed1390ed2e8fa91008e8bf7",
             "lazy"
         ),
-        "HeLa_0.1_focal": (
+        "HeLa_focal": (
             "config.yaml",
             "md5:320852546ed1390ed2e8fa91008e8bf7",
             "lazy"

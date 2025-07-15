@@ -76,12 +76,14 @@ def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
 
     model_selector = QtWidgets.QComboBox()
     model_selector.addItem("HeLa")
+    model_selector.addItem("HeLa_focal")
     model_selector.addItem("U2OS")
-    model_selector.addItem("HeLa_oof")
-    model_selector.addItem("U2OS_new")
-    model_selector.addItem("U2OS_l")
-    model_selector.addItem("U2OS_0.7")
+    model_selector.addItem("U2OS_focal")
     model_selector.addItem("HT1080")
+    model_selector.addItem("HT1080_focal")
+    model_selector.addItem("RPE1")
+    model_selector.addItem("RPE1_focal")
+    model_selector.addItem("general")
     widgets = {"model_selector": ("Select Model", model_selector)}
 
     thresholder = QtWidgets.QDoubleSpinBox()
