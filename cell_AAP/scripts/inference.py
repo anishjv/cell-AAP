@@ -176,7 +176,8 @@ def get_model(model_name:str):
         ),
         "general": (
             "config.yaml",
-            "md5:ad609c147ea2cd7d7fde0d734de2e166"
+            "md5:ad609c147ea2cd7d7fde0d734de2e166",
+            "lazy"
         )
 
     }

@@ -464,7 +464,8 @@ def get_model(cellaap_widget):
         ),
         "general": (
             "config.yaml",
-            "md5:ad609c147ea2cd7d7fde0d734de2e166"
+            "md5:ad609c147ea2cd7d7fde0d734de2e166",
+            "lazy"
         )
 
     }
