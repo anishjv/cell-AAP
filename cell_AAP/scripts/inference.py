@@ -307,12 +307,10 @@ def inference(
     """
 
     if container['model_type'] == "yacs":
-        if img.shape != (2048, 2048):
-            img = au.square_reshape(img, (2048, 2048))
         output = container['predictor'](img.astype("float32"))
 
     else:
-        if img.shape != (1024, 1024):
+        if img.shape == (2048, 2048):
             img = au.square_reshape(img, (1024, 1024))
         img_perm = np.moveaxis(img, -1, 0)
 
