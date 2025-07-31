@@ -43,7 +43,7 @@ def preprocess_2d(
         im, tophatstruct
     )  # Background subtraction + uneven illumination correction
 
-    if erosionstruct:
+    if isinstance(erosionstruct, np.ndarray):
         im = erosion(im, erosionstruct)
     else:
         pass
@@ -254,7 +254,6 @@ def iou_with_list(
         combo_1_area = np.count_nonzero(combo_1 == 1)
         combo_2_area = np.count_nonzero(combo_2 == 1)
         intersection = np.count_nonzero(np.logical_and(combo_1, combo_2))
-        print(combo_1_area, combo_2, intersection)
         iou = intersection / (combo_1_area + combo_2_area - intersection)
 
         if iou >= iou_thresh:
@@ -388,7 +387,7 @@ def crop_regions_predict(
     dna_regions = []
     phs_regions = []
     segmentations = []
-    dna_seg
+    dna_seg = []
     boxes = []
     box_size_func = box_size[0]
     box_size_args = box_size[1]
@@ -423,7 +422,6 @@ def crop_regions_predict(
 
             x1, y1 = x - box_sizes, y + box_sizes  # top left
             x2, y2 = x + box_sizes, y - box_sizes  # bottom right
-
             coords_temp = [x1, y2, x2, y1]
 
             if all(k >= 0 and k <= dna_image_stack.shape[1] for k in coords_temp) == False:
@@ -432,18 +430,16 @@ def crop_regions_predict(
                 pass
                 
 
-            dna_image = Image.fromarray(dna_image_stack[i, :, :])
-            dna_region = np.asarray(dna_image.crop((x1, y2, x2, y1)))
+            dna_region = dna_image_stack[i, int(y2):int(y1), int(x1):int(x2)]
             dna_regions_temp.append(dna_region)
 
-            og_seg = Image.fromarray(labeled_stack[i, :, :])
-            og_seg_region = np.asarray(og_seg.crop((x1, y2, x2, y1)))
-            og_seg_region = og_seg_region[og_seg_region == cell_props.label]
+            og_seg_region = labeled_stack[i, int(y2):int(y1), int(x1):int(x2)]
+            og_seg_region = (og_seg_region == cell_props.label).astype(np.uint8)
             dna_seg_temp.append(og_seg_region)
 
-            phs_image = Image.fromarray(phase_image_stack[i, :, :])
-            phs_region = np.asarray(phs_image.crop((x1, y2, x2, y1)))
+            phs_region = phase_image_stack[i, int(y2):int(y1), int(x1):int(x2)]
             phs_regions_temp.append(phs_region)
+
 
             if to_segment == True:
                 if (
