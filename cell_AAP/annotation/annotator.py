@@ -23,7 +23,7 @@ class Annotator:
         self.configs = configs
         self.frame_count = self.cell_count = None
         self.cleaned_binary_roi = self.cleaned_scalar_roi = None
-        self.masks =  self.roi = self.labels = self.coords = self.segmentations = None
+        self.roi = self.labels = self.coords = self.segmentations = None
         self.cropped = False
         self.df_generated = False
         self.to_segment = True
@@ -109,9 +109,9 @@ class Annotator:
         (
             self.roi,
             self.discarded_box_counter,
-            region_props_stack,
             self.segmentations,
-            self.phs_roi
+            self.phs_roi,
+            self.cleaned_binary_roi
         ) = crop_regions_predict(
             self.dna_image_stack,
             self.phase_image_stack,
@@ -128,9 +128,20 @@ class Annotator:
             self.configs.iou_thresh
         )
 
-        self.cleaned_binary_roi, self.cleaned_scalar_roi, self.masks = clean_regions(
-            self.roi, self.configs.threshold_division, self.configs.gaussian_sigma, self.configs.threshold_type
-        )
+
+        self.cleaned_scalar_roi = []
+
+        for i in range(self.cleaned_binary_roi.shape[0]):
+            cleaned_scalar_roi_temp = []
+
+            for binary_mask, intensity in zip(self.cleaned_binary_roi[i], self.roi[i]):
+                cleaned_scalar_roi = binary_mask * intensity
+                cleaned_scalar_roi_temp.append(cleaned_scalar_roi)
+
+            self.cleaned_scalar_roi.append(cleaned_scalar_roi_temp)
+
+        self.cleaned_scalar_roi = np.asarray(self.cleaned_scalar_roi, dtype='object')
+
         self.cropped = True
         return self
 

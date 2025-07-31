@@ -21,8 +21,9 @@ def preprocess_2d(
     image: npt.NDArray,
     threshold_division: float,
     sigma: float,
-    threshold_type: str = "single",
-    tophatstruct=square(71),
+    threshold_type: Optional[str] = "single",
+    erosionstruct: Optional[any] = False,
+    tophatstruct: Optional[any] = square(71),
 ) -> tuple[npt.NDArray, npt.NDArray]:
     """
     Preprocesses a specified image
@@ -41,6 +42,12 @@ def preprocess_2d(
     im = white_tophat(
         im, tophatstruct
     )  # Background subtraction + uneven illumination correction
+
+    if erosionstruct:
+        im = erosion(im, erosionstruct)
+    else:
+        pass
+
     if threshold_type == "multi":
         thresholds = threshold_multiotsu(im)
         redseg = np.digitize(im, bins=thresholds)
@@ -57,9 +64,9 @@ def preprocess_3d(
     targetstack: npt.NDArray,
     threshold_division: float,
     sigma: int,
-    threshold_type: str,
-    erosionstruct,
-    tophatstruct,
+    threshold_type: Optional[str] = "single",
+    erosionstruct: Optional[any] = False,
+    tophatstruct: Optional[any] = square(71),
 ) -> tuple[npt.NDArray, skimage.measure.regionprops]:
     """
     Preprocesses a stack of images
@@ -78,22 +85,9 @@ def preprocess_3d(
 
     for i in range(targetstack.shape[0]):
         im = targetstack[i, :, :].copy()
-        im = gaussian(im, sigma)  # 2D gaussian smoothing filter to reduce noise
-        im = white_tophat(
-            im, tophatstruct
-        )  # Background subtraction + uneven illumination correction
 
-        im = erosion(im, erosionstruct)
-        if threshold_type == "multi":
-            thresholds = threshold_multiotsu(im)
-            redseg = np.digitize(im, bins=thresholds)
+        labels, _ = preprocess_2d(im, threshold_division, sigma, threshold_type, erosionstruct, tophatstruct)
 
-        else:
-            thresh = threshold_isodata(im)
-            redseg = im > (thresh / threshold_division)
-
-        lblred = label(redseg)
-        labels = label(lblred)
         region_props[f"Frame_{i}"] = regionprops(labels, intensity_image=labels * im)
         labels_whole.append(labels)
 
@@ -373,6 +367,7 @@ def crop_regions_predict(
                            Note: segmentations must converted back to masks in the following way
                                 1) mask = np.unpackbits(instance.segmentations[1][i], axis = 0, count = 2048)
                                 2) mask = np.array([mask])
+            dna_seg: region containing nucleus mask 
     """
     try:
         assert dna_image_stack.shape[0] == phase_image_stack.shape[0]
@@ -393,10 +388,12 @@ def crop_regions_predict(
     dna_regions = []
     phs_regions = []
     segmentations = []
+    dna_seg
     boxes = []
     box_size_func = box_size[0]
     box_size_args = box_size[1]
-    _, dna_image_region_props = preprocess_3d(
+
+    labeled_stack, dna_image_region_props = preprocess_3d(
         dna_image_stack,
         threshold_division,
         sigma,
@@ -411,6 +408,7 @@ def crop_regions_predict(
         box_sizes = box_size_wrapper(box_size_func, frame_props, box_size_args)
         dna_regions_temp = []
         phs_regions_temp = []
+        dna_seg_temp = []
         segmentations_temp = []
         discarded_box_counter = np.append(discarded_box_counter, 0)
         sam_current_image = i
@@ -418,7 +416,8 @@ def crop_regions_predict(
 
         for j, _ in enumerate(dna_image_region_props[f"Frame_{i}"]):  # for each cell
 
-            y, x = frame_props[j].centroid
+            cell_props = frame_props[j]
+            y, x = cell_props.centroid
             if isinstance(box_sizes, list):
                 box_sizes = box_sizes[j]
 
@@ -436,6 +435,12 @@ def crop_regions_predict(
             dna_image = Image.fromarray(dna_image_stack[i, :, :])
             dna_region = np.asarray(dna_image.crop((x1, y2, x2, y1)))
             dna_regions_temp.append(dna_region)
+
+            og_seg = Image.fromarray(labeled_stack[i, :, :])
+            og_seg_region = np.asarray(og_seg.crop((x1, y2, x2, y1)))
+            og_seg_region = og_seg_region[og_seg_region == cell_props.label]
+            dna_seg_temp.append(og_seg_region)
+
             phs_image = Image.fromarray(phase_image_stack[i, :, :])
             phs_region = np.asarray(phs_image.crop((x1, y2, x2, y1)))
             phs_regions_temp.append(phs_region)
@@ -494,23 +499,30 @@ def crop_regions_predict(
         phs_regions_temp = [
             roi for i, roi in enumerate(phs_regions_temp) if i not in poped_indices
         ]
+        dna_seg_temp = [
+            roi for i, roi in enumerate(dna_seg_temp) if i not in poped_indices
+        ]
+
         discarded_box_counter[i] += len(poped_indices)
         dna_regions.append(dna_regions_temp)
         phs_regions.append(phs_regions_temp)
+        dna_seg.append(dna_seg_temp)
 
     dna_regions = np.asarray(dna_regions, dtype=object)
     phs_regions = np.asarray(phs_regions, dtype=object)
     segmentations = np.asarray(segmentations, dtype=object)
+    dna_seg = np.asarray(dna_seg, dtype = object)
 
     return (
         dna_regions,
         discarded_box_counter,
-        dna_image_region_props,
         segmentations,
         phs_regions,
+        dna_seg
     )
 
 
+'''
 def crop_regions_predict_exp(
     dna_image_stack,
     phase_image_stack,
@@ -701,6 +713,7 @@ def clean_regions(
     cleaned_intensity_regions = np.asarray(cleaned_intensity_regions, dtype="object")
 
     return cleaned_regions, cleaned_intensity_regions, masks
+'''
 
 
 def add_labels(data_frame: npt.NDArray, labels: npt.NDArray) -> npt.NDArray:
