@@ -170,18 +170,13 @@ class Annotator:
             assert isinstance(self.configs.propslist, list)
         except Exception as error:
             raise AssertionError("props_list must be of type 'list'") from error
-        try:
-            assert len(self.cell_count) == self.frame_count
-        except Exception as error:
-            raise AssertionError(
-                "cell_count must contain the same number of frames as specified by frame_count"
-            ) from error
+
 
         main_df = []
 
         for i in range(self.cleaned_binary_roi.shape[0]):
             for j, region in enumerate(self.cleaned_binary_roi[i]):
-                if self.region.any() != 0:
+                if region.any() != 0:
                     props = regionprops_table(
                         region.astype("uint8"),
                         intensity_image=self.cleaned_scalar_roi[i][j],

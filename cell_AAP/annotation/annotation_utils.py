@@ -87,7 +87,6 @@ def preprocess_3d(
         im = targetstack[i, :, :].copy()
 
         labels, _ = preprocess_2d(im, threshold_division, sigma, threshold_type, erosionstruct, tophatstruct)
-
         region_props[f"Frame_{i}"] = regionprops(labels, intensity_image=labels * im)
         labels_whole.append(labels)
 
@@ -230,39 +229,36 @@ def bbox_wrapper(
         raise AttributeError("args do not match function") from error
 
 
+def compute_iou(mask1: npt.NDArray, mask2: npt.NDArray) -> float:
+    intersection = np.logical_and(mask1, mask2).sum()
+    union = np.logical_or(mask1, mask2).sum()
+    return intersection / union if union != 0 else 0
+
 def iou_with_list(
-    input_list: list[npt.NDArray], iou_thresh: float
+    input_list: list[npt.NDArray],
+    iou_thresh: float
 ) -> tuple[list[npt.NDArray], list[int]]:
-    """
-    Computes the IOU of all combinations of arrays in a list and returns a new list with arrays for which iou > iou_thresh are removed
-    -------------------------------------------------------------------------------------------------------------------------------------
-    INPUTS:
-        input_list: list[npt.NDArray]
-        iou_thresh: float
+    # Sort by mask area (smallest first) to preferentially keep larger masks
+    input_list = sorted(input_list, key=lambda x: np.count_nonzero(x))
 
-    OUTPUTS:
-        input_list: list[npt.NDArray]
-    """
-    poped_indices = []
-    sorted_list = sorted(input_list, key=lambda x: np.count_nonzero(x == 1))
+    to_remove = set()
+    bin_masks = [mask.astype(bool) for mask in input_list]
 
-    combinations = list(itertools.combinations(sorted_list, 2))
-    for combo in combinations:
-        combo_1 = combo[0] > 0
-        combo_2 = combo[1] > 0
+    for i in range(len(bin_masks)):
+        if i in to_remove:
+            continue
+        for j in range(i + 1, len(bin_masks)):
+            if j in to_remove:
+                continue
+            iou = compute_iou(bin_masks[i], bin_masks[j])
+            if iou >= iou_thresh:
+                to_remove.add(j)
 
-        combo_1_area = np.count_nonzero(combo_1 == 1)
-        combo_2_area = np.count_nonzero(combo_2 == 1)
-        intersection = np.count_nonzero(np.logical_and(combo_1, combo_2))
-        iou = intersection / (combo_1_area + combo_2_area - intersection)
+    # Build new list and track removed indices
+    kept_list = [m for idx, m in enumerate(input_list) if idx not in to_remove]
+    removed_indices = sorted(list(to_remove))
 
-        if iou >= iou_thresh:
-            for i, _ in enumerate(input_list):
-                if np.array_equal(input_list[i], combo[0]):
-                    poped_indices.append(i)
-    input_list = [seg for i, seg in enumerate(input_list) if i not in poped_indices]
-
-    return input_list, poped_indices
+    return kept_list, removed_indices
 
 
 def predict(
@@ -368,6 +364,7 @@ def crop_regions_predict(
                                 2) mask = np.array([mask])
             dna_seg: region containing nucleus mask 
     """
+
     try:
         assert dna_image_stack.shape[0] == phase_image_stack.shape[0]
     except Exception as error:
