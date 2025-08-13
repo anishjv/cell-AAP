@@ -268,6 +268,7 @@ def iou_with_list(
     _POPCOUNT = np.array([bin(i).count("1") for i in range(256)], dtype=np.uint8)
 
     def _area_packed(mask: np.ndarray) -> int:
+        m = mask.view(np.uint8)
         # upcast before sum to avoid uint8 overflow
         return int(_POPCOUNT[m].astype(np.uint32).sum())
 
