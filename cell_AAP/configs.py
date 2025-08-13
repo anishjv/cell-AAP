@@ -17,7 +17,6 @@ class Cfg:
         point_prompts: bool,
         box_prompts: bool,
         propslist: list[str],
-        frame_step: int,
         box_size: tuple,
         bbox_func : tuple,
         iou_thresh: float,
@@ -31,7 +30,6 @@ class Cfg:
         self.point_prompts = point_prompts
         self.box_prompts = box_prompts
         self.propslist = propslist
-        self.frame_step = frame_step
         self.box_size = box_size
         self.bbox_func = bbox_func
         self.iou_thresh = iou_thresh
@@ -52,7 +50,6 @@ class Cfg:
                 point_prompts=default["POINTPROMPTS"],
                 box_prompts=default["BOXPROMPTS"],
                 propslist=default["PROPSLIST"],
-                frame_step=default["FRAMESTEP"],
                 box_size=default["BOX_SIZE"],
                 bbox_func = default['BBOX_FUNC'],
                 iou_thresh=default["IOU_THRESH"],

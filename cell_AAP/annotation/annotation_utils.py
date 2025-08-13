@@ -399,8 +399,8 @@ def crop_regions_predict(
     Crops regions from DNA and phase microscopy images and generates cell segmentations.
     ------------------------------------------------------------------------------------------------------
     INPUTS:
-    	dna_image_stack: npt.NDArray, array of shape (frame_count, x, y) where each frame corresponds to one DNA image
-    	phase_image_stack: npt.NDArray, array of shape (frame_count, x, y) where each frame corresponds to one phase image
+    	dna_image_stack: npt.NDArray, array of shape (image_count, x, y) where each image corresponds to one DNA image
+    	phase_image_stack: npt.NDArray, array of shape (image_count, x, y) where each image corresponds to one phase image
     	predictor: SAM predictor object, predictive algorithm for segmenting cells
     	threshold_division: float, division factor for threshold calculation
     	sigma: float, sigma value for Gaussian smoothing

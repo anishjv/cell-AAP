@@ -28,7 +28,7 @@ _HELA["PROPSLIST"] = [
     "intensity_min",
     "area_filled",
 ]
-_HELA["FRAMESTEP"] = 1
+# FRAMESTEP removed - time-series support deprecated
 _HELA["BOX_SIZE"] = (au.get_box_size, (2.5,))
 _HELA["IOU_THRESH"] = 0.85
 _HELA["BBOX_FUNC"] = (au.square_box)

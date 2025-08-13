@@ -1,5 +1,6 @@
 import re
 import numpy as np
+import cv2
 import tifffile as tiff
 from skimage.measure import regionprops_table
 from annotation_utils import *
@@ -21,7 +22,7 @@ class Annotator:
         self.phase_image_list = phase_image_list
         self.phase_image_stack = phase_image_stack
         self.configs = configs
-        self.frame_count = self.cell_count = None
+        self.cell_count = None
         self.cleaned_binary_roi = self.cleaned_scalar_roi = None
         self.roi = self.labels = self.coords = self.segmentations = None
         self.cropped = False
@@ -41,8 +42,6 @@ class Annotator:
                 "dna_image_list and phase_image_list must be of the same length (number of files)"
             ) from error
         
-        frame_step = configs.frame_step
-        
         if len(dna_image_list) > 1:
             if (re.search(r"^.+\.(?:(?:[tT][iI][fF][fF]?)|(?:[tT][iI][fF]))$", str(dna_image_list[0]))== None):
                 dna_image_stack = [
@@ -52,32 +51,58 @@ class Annotator:
                     cv2.imread(str(phase_image_list[i]), cv2.IMREAD_GRAYSCALE) for i, _ in enumerate(phase_image_list)
                 ]
             else:
-            
                 dna_image_stack = [
                     tiff.imread(dna_image_list[i]) for i,_ in enumerate(dna_image_list)
                 ]
                 phase_image_stack = [
                     tiff.imread(phase_image_list[i]) for i,_ in enumerate(phase_image_list)
                 ]
-     
-            if len(dna_image_stack[0].shape) == 3:
-                dna_image_stack = [movie[0::frame_step, :, :] for movie in dna_image_stack]
-                phase_image_stack = [movie[0::frame_step, :, :] for movie in phase_image_stack]
-                dna_image_stack = np.concatenate(dna_image_stack, axis = 0)
-                phase_image_stack = np.concatenate(phase_image_stack, axis = 0)
                 
-            elif len(dna_image_stack[0].shape) == 2:
-                dna_image_stack = np.stack(dna_image_stack, axis = 0)
-                phase_image_stack = np.stack(phase_image_stack, axis = 0)
-                     
+                # Check for multi-frame TIFF images in the list
+                for i, (dna_img, phase_img) in enumerate(zip(dna_image_stack, phase_image_stack)):
+                    if len(dna_img.shape) == 3 or len(phase_img.shape) == 3:
+                        raise ValueError(
+                            f"Multi-frame TIFF image detected at index {i}: {dna_img.shape}. "
+                            "Time-series data is not supported as it can lead to cell duplication in datasets. "
+                            "Please provide single-frame images or extract individual frames from your time-series data."
+                        )
+            
+            # Stack multiple images into a single 3D array
+            dna_image_stack = np.stack(dna_image_stack, axis=0)
+            phase_image_stack = np.stack(phase_image_stack, axis=0)
                      
         else:
             if (re.search(r"^.+\.(?:(?:[tT][iI][fF][fF]?)|(?:[tT][iI][fF]))$", str(dna_image_list[0]))== None):
+                # Non-TIFF files (JPEG, PNG, etc.) - cv2.imread always returns 2D arrays
                 dna_image_stack = cv2.imread(str(dna_image_list[0]), cv2.IMREAD_GRAYSCALE)
                 phase_image_stack = cv2.imread(str(phase_image_list[0]), cv2.IMREAD_GRAYSCALE)
+                                
+                # Convert to 3D stack format
+                dna_image_stack = np.expand_dims(dna_image_stack, axis=0)
+                phase_image_stack = np.expand_dims(phase_image_stack, axis=0)
             else:
-                dna_image_stack = tiff.imread(dna_image_list[0])[0::frame_step, :, :]
-                phase_image_stack = tiff.imread(phase_image_list[0])[0::frame_step, :, :]
+                # TIFF files - can be 2D or 3D
+                dna_image_stack = tiff.imread(dna_image_list[0])
+                phase_image_stack = tiff.imread(phase_image_list[0])
+                
+                # Handle single 2D TIFF images
+                if len(dna_image_stack.shape) == 2 and len(phase_image_stack.shape) == 2:
+                    dna_image_stack = np.expand_dims(dna_image_stack, axis=0)
+                    phase_image_stack = np.expand_dims(phase_image_stack, axis=0)
+                    
+                # Multi-frame TIFF images are not supported due to cell duplication concerns
+                else:
+                    if len(dna_image_stack.shape) == 3 and len(phase_image_stack.shape) == 3:
+                        raise ValueError(
+                            f"Multi-frame TIFF image detected: DNA shape {dna_image_stack.shape}, Phase shape {phase_image_stack.shape}. "
+                            "Time-series data is not supported as it can lead to cell duplication in datasets. "
+                            "Please provide single-frame images or extract individual frames from your time-series data."
+                        )
+                    else:
+                        raise ValueError(
+                            f"Invalid image format: DNA shape {dna_image_stack.shape}, Phase shape {phase_image_stack.shape}. "
+                            "Please provide lists of 2-D images."
+                        )
 
         return cls(
             dna_image_list,
