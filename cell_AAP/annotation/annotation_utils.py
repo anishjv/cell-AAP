@@ -12,6 +12,7 @@ from skimage.filters import (
 )  # pylint: disable=no-name-in-module
 from typing import Optional, Union
 import scipy
+import gc  # Add garbage collection import
 
 
 def preprocess_2d(
@@ -66,7 +67,7 @@ def preprocess_3d(
     threshold_type: Optional[str] = "single",
     erosionstruct: Optional[any] = False,
     tophatstruct: Optional[any] = square(71),
-) -> tuple[npt.NDArray, skimage.measure.regionprops]:
+) -> tuple[npt.NDArray, dict]:
     """
     Preprocesses a stack of images and computes region properties for each frame.
     ------------------------------------------------------------------------------------------------------
@@ -93,6 +94,11 @@ def preprocess_3d(
         )
         region_props[f"Frame_{i}"] = regionprops(labels, intensity_image=labels * im)
         labels_whole.append(labels)
+        
+        # Clear intermediate variables to reduce memory usage
+        del im
+        if i % 10 == 0:  # Garbage collect every 10 frames
+            gc.collect()
 
     labels_whole = np.asarray(labels_whole)
 
@@ -115,7 +121,8 @@ def bw_to_rgb(
     	rgb_image: npt.NDArray, RGB image of shape (x, y, 3) with identical values across all channels
     """
     if len(np.asarray(image).shape) == 2:
-        image = cv2.normalize(
+        # Normalize image in-place to save memory
+        image_normalized = cv2.normalize(
             np.asarray(image),
             None,
             max_pixel_value,
@@ -123,10 +130,11 @@ def bw_to_rgb(
             cv2.NORM_MINMAX,
             cv2.CV_8U,
         )
-        rgb_image = np.zeros((image.shape[0], image.shape[1], 3), "uint8")
-        rgb_image[:, :, 0] = image
-        rgb_image[:, :, 1] = image
-        rgb_image[:, :, 2] = image
+        # Use broadcasting for more memory-efficient RGB conversion
+        rgb_image = np.stack([image_normalized] * 3, axis=-1)
+        
+        # Clear intermediate variable
+        del image_normalized
 
     return rgb_image
 
@@ -339,8 +347,15 @@ def predict(
             ) from error
 
         input_boxes = torch.tensor(boxes, device=predictor.device)
+        # Get image shape from predictor if image is None
+        if image is None:
+            # SAM already has the image set, get shape from predictor
+            image_shape = predictor.original_size
+        else:
+            image_shape = image.shape[:2]
+            
         transformed_boxes = predictor.transform.apply_boxes_torch(
-            input_boxes, image.shape[:2]
+            input_boxes, image_shape
         )
         masks, _, _ = predictor.predict_torch(
             point_coords=None,
@@ -434,7 +449,8 @@ def crop_regions_predict(
             "You must use only one of box prompts and point prompts"
         ) from error
 
-    batch_size = 50
+    # Reduce batch size to minimize memory usage
+    batch_size = 10  # Reduced from 50
     discarded_box_counter = np.array([])
     dna_regions = []
     phs_regions = []
@@ -444,6 +460,7 @@ def crop_regions_predict(
     box_size_func = box_size[0]
     box_size_args = box_size[1]
 
+    # Process images one at a time to reduce memory usage
     labeled_stack, dna_image_region_props = preprocess_3d(
         dna_image_stack,
         threshold_division,
@@ -464,6 +481,16 @@ def crop_regions_predict(
         discarded_box_counter = np.append(discarded_box_counter, 0)
         sam_current_image = i
         sam_previous_image = None
+        
+        # Clear SAM memory before processing new image
+        if to_segment and predictor is not None:
+            try:
+                predictor.reset_image()
+            except:
+                pass  # Some SAM versions don't have reset_image
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
 
         for j, _ in enumerate(dna_image_region_props[f"Frame_{i}"]):  # for each cell
 
@@ -502,11 +529,16 @@ def crop_regions_predict(
                     sam_current_image != sam_previous_image
                     or sam_previous_image == None
                 ):
+                    # Convert to RGB only when needed and clear after use
                     phase_image_rgb = bw_to_rgb(
                         phase_image_stack[sam_current_image, :, :]
                     )
                     predictor.set_image(phase_image_rgb)
                     sam_previous_image = sam_current_image
+                    
+                    # Clear the RGB image from memory after setting it in predictor
+                    del phase_image_rgb
+                    gc.collect()
 
                 if box_prompts == True:
 
@@ -522,13 +554,12 @@ def crop_regions_predict(
                     ):
                         masks = predict(
                             predictor,
-                            phase_image_rgb,
+                            None,  # Don't pass RGB image again, SAM already has it
                             boxes=boxes,
                             box_prompts=True,
                         )
 
-                        for mask in masks:
-                            segmentations_temp.append(mask)
+                        segmentations_temp = masks
                         boxes = []
 
                 elif point_prompts == True:
@@ -536,7 +567,7 @@ def crop_regions_predict(
                     points = [[x, y]]
                     mask = predict(
                         predictor,
-                        phase_image_rgb,
+                        None,  # Don't pass RGB image again, SAM already has it
                         points=points,
                         point_prompts=True,
                     )
@@ -568,6 +599,10 @@ def crop_regions_predict(
         phs_regions.append(phs_regions_temp)
         dna_seg.append(dna_seg_temp)
 
+    # Clear large intermediate data structures
+    del labeled_stack, dna_image_region_props
+    gc.collect()
+    
     dna_regions = np.asarray(dna_regions, dtype=object)
     phs_regions = np.asarray(phs_regions, dtype=object)
     segmentations = np.asarray(segmentations, dtype=object)

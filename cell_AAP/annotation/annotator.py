@@ -2,6 +2,7 @@ import re
 import numpy as np
 import cv2
 import tifffile as tiff
+import gc
 from skimage.measure import regionprops_table
 from annotation_utils import *
 from typing import Optional
@@ -166,6 +167,18 @@ class Annotator:
             self.cleaned_scalar_roi.append(cleaned_scalar_roi_temp)
 
         self.cleaned_scalar_roi = np.asarray(self.cleaned_scalar_roi, dtype='object')
+
+        # Clear predictor memory after processing
+        if predictor is not None:
+            try:
+                predictor.reset_image()
+            except:
+                pass
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        
+        # Force garbage collection
+        gc.collect()
 
         self.cropped = True
         return self
