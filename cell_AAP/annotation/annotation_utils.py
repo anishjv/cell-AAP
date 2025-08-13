@@ -2,11 +2,9 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 import torch
-from PIL import Image
 import skimage
 from skimage.measure import regionprops, label
-from skimage.morphology import white_tophat, square, disk, erosion
-from skimage.segmentation import clear_border
+from skimage.morphology import white_tophat, square, erosion
 from skimage.filters import (
     gaussian,
     threshold_isodata,
@@ -14,7 +12,6 @@ from skimage.filters import (
 )  # pylint: disable=no-name-in-module
 from typing import Optional, Union
 import scipy
-import itertools
 
 
 def preprocess_2d(
@@ -26,16 +23,18 @@ def preprocess_2d(
     tophatstruct: Optional[any] = square(71),
 ) -> tuple[npt.NDArray, npt.NDArray]:
     """
-    Preprocesses a specified image
-    ------------------------------
+    Preprocesses a 2D image with Gaussian smoothing, background subtraction, and thresholding.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        image: n-darray
-        strel_cell: n-darray, structuring element for white_tophat
-        threshold_division: float or int
-        sigma: float or int
+    	image: npt.NDArray, input image to preprocess
+    	threshold_division: float, division factor for threshold calculation
+    	sigma: float, sigma value for Gaussian smoothing
+    	threshold_type: Optional[str], type of thresholding ("single" or "multi")
+    	erosionstruct: Optional[any], structuring element for erosion operation
+    	tophatstruct: Optional[any], structuring element for white top-hat operation
     OUTPUTS:
-        redseg: n-darray, segmented targetstack
-        labels: n-darray, labeled redseg
+    	labels: npt.NDArray, labeled connected components
+    	redseg: npt.NDArray, binary segmented image
     """
 
     im = gaussian(image, sigma)  # 2D gaussian smoothing filter to reduce noise
@@ -54,8 +53,8 @@ def preprocess_2d(
     else:
         thresh = threshold_isodata(im)
         redseg = im > (thresh / threshold_division)
-    lblred = label(redseg)
-    labels = label(lblred)
+
+    labels = label(redseg)
 
     return labels, redseg
 
@@ -69,18 +68,18 @@ def preprocess_3d(
     tophatstruct: Optional[any] = square(71),
 ) -> tuple[npt.NDArray, skimage.measure.regionprops]:
     """
-    Preprocesses a stack of images
-    ------------------------------
+    Preprocesses a stack of images and computes region properties for each frame.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        targetstack: npt.NDArray, stack of (n x n) images, i.e. a (z, n, n) dimensional array
-        threshold_division: float, division factor for threshold calculation
-        sigma: int, sigma value for Gaussian smoothing
-        threshold_type: Optional[str], type of thresholding to use ("single" or "multi")
-        erosionstruct: Optional[any], structuring element for erosion operation
-        tophatstruct: Optional[any], structuring element for white top-hat operation
+    	targetstack: npt.NDArray, stack of images with shape (z, n, n)
+    	threshold_division: float, division factor for threshold calculation
+    	sigma: int, sigma value for Gaussian smoothing
+    	threshold_type: Optional[str], type of thresholding to use ("single" or "multi")
+    	erosionstruct: Optional[any], structuring element for erosion operation
+    	tophatstruct: Optional[any], structuring element for white top-hat operation
     OUTPUTS:
-        labels_whole: npt.NDArray, labeled stack of processed images
-        region_props: skimage.measure.regionprops, region properties for each cell in each stack of a given image, can be indexed as 'region_props['Frame_i']'
+    	labels_whole: npt.NDArray, labeled stack of processed images
+    	region_props: dict, region properties for each frame, indexed as 'region_props['Frame_i']'
     """
 
     region_props = {}
@@ -106,14 +105,14 @@ def bw_to_rgb(
     min_pixel_value: Optional[int] = 0,
 ) -> npt.NDArray:
     """
-    Converts a black and white image to RGB format
-    ----------------------------------------------
+    Converts a black and white image to RGB format by replicating the grayscale values across all channels.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        image: npt.NDArray, an image of shape (x, y)
-        max_pixel_value: Optional[int], the maximum desired pixel value for the output array
-        min_pixel_value: Optional[int], the minimum desired pixel value for the output array
+    	image: npt.NDArray, input grayscale image of shape (x, y)
+    	max_pixel_value: Optional[int], maximum pixel value for normalization (default 255)
+    	min_pixel_value: Optional[int], minimum pixel value for normalization (default 0)
     OUTPUTS:
-        rgb_image: npt.NDArray, RGB image of shape (x, y, 3) where each channel contains the same grayscale values
+    	rgb_image: npt.NDArray, RGB image of shape (x, y, 3) with identical values across all channels
     """
     if len(np.asarray(image).shape) == 2:
         image = cv2.normalize(
@@ -136,13 +135,13 @@ def get_box_size(
     region_props: skimage.measure.regionprops, scaling_factor: float
 ) -> float:
     """
-    Computes bounding box size for cell segmentation based on region properties
-    --------------------------------------------------------------------------
+    Computes bounding box size for cell segmentation based on region properties.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        region_props: skimage.measure.regionprops, region properties object where each index represents properties of a given cell
-        scaling_factor: float, the average area of a cell divided by the average area of a nuclei. If an ideal bb_side_length is known, compute the scaling factor with the equation: scaling_factor = l^2 / A where l is your ideal bb_side_length and A is the mean or median area of a nuclei
+    	region_props: skimage.measure.regionprops, region properties for detected nuclei
+    	scaling_factor: float, scaling factor to convert nucleus size to cell size (l²/A where l is ideal box length, A is mean nucleus area)
     OUTPUTS:
-        bb_side_length: float, half the side length of a bounding box
+    	bb_side_length: float, half the side length of a bounding box
     """
 
     major_axis = [region_props[i].axis_major_length for i, _ in enumerate(region_props)]
@@ -156,13 +155,13 @@ def get_box_size(
 
 def get_box_size_scaled(region_props, max_size: float) -> list[float]:
     """
-    Computes scaled bounding box sizes based on region properties and intensity
-    --------------------------------------------------------------------------
+    Computes scaled bounding box sizes based on region properties and intensity.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        region_props: skimage.measure.regionprops, region properties object where each index represents properties of a given cell
-        max_size: float, the maximum size for bounding box calculation
+    	region_props: skimage.measure.regionprops, region properties for detected nuclei
+    	max_size: float, maximum bounding box size for scaling
     OUTPUTS:
-        bb_side_lengths: list[float], list of half side lengths for bounding boxes, scaled based on cell properties
+    	bb_side_lengths: list[float], list of half side lengths for bounding boxes, scaled based on nucleus properties
     """
 
     major_axis = [region_props[i].axis_major_length for i, _ in enumerate(region_props)]
@@ -190,13 +189,13 @@ def get_box_size_scaled(region_props, max_size: float) -> list[float]:
 
 def square_box(centroid: npt.NDArray, box_size: float) -> npt.NDArray:
     """
-    Draws an upright bounding box given a centroid and box size
-    ----------------------------------------------------------
+    Draws an upright bounding box given a centroid and box size.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        centroid: npt.NDArray, centroid coordinates in the form (y, x)
-        box_size: float, half the side length of the bounding box
+    	centroid: npt.NDArray, centroid coordinates in the form (y, x)
+    	box_size: float, half the side length of the bounding box
     OUTPUTS:
-        coords: npt.NDArray, bounding box coordinates in the form [x1, y2, x2, y1] where (x1, y1) is top-left and (x2, y2) is bottom-right
+    	coords: npt.NDArray, bounding box coordinates in the form [x1, y2, x2, y1] where (x1, y1) is top-left and (x2, y2) is bottom-right
     """
 
     x, y = centroid[1], centroid[0]  # centroid must be of the form (y, x)
@@ -208,14 +207,14 @@ def square_box(centroid: npt.NDArray, box_size: float) -> npt.NDArray:
 
 def box_size_wrapper(func, frame_props, args):
     """
-    Facilitates the usage of different box size determination functions
-    ----------------------------------------------------------------
+    Facilitates the usage of different box size determination functions.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        func: callable, function to determine box sizes
-        frame_props: skimage.measure.regionprops, region properties for a frame
-        args: tuple, additional arguments to pass to the function
+    	func: callable, function to determine box sizes
+    	frame_props: skimage.measure.regionprops, region properties for a frame
+    	args: tuple, additional arguments to pass to the function
     OUTPUTS:
-        result: any, result from the box size determination function
+    	result: any, result from the box size determination function
     """
     try:
         return func(frame_props, *args)
@@ -227,15 +226,15 @@ def bbox_wrapper(
     func, centroid, box_size: Optional[float] = None, args: Optional[list] = None
 ):
     """
-    Facilitates the usage of different box drawing determination functions
-    ----------------------------------------------------------------------
+    Facilitates the usage of different box drawing determination functions.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        func: callable, function to draw bounding boxes
-        centroid: npt.NDArray, centroid coordinates in the form (y, x)
-        box_size: Optional[float], half the side length of the bounding box
-        args: Optional[list], additional arguments to pass to the function
+    	func: callable, function to draw bounding boxes
+    	centroid: npt.NDArray, centroid coordinates in the form (y, x)
+    	box_size: Optional[float], half the side length of the bounding box
+    	args: Optional[list], additional arguments to pass to the function
     OUTPUTS:
-        result: any, result from the box drawing function
+    	result: any, result from the box drawing function
     """
     try:
         if box_size and args:
@@ -250,55 +249,58 @@ def bbox_wrapper(
         raise AttributeError("args do not match function") from error
 
 
-def compute_iou(mask1: npt.NDArray, mask2: npt.NDArray) -> float:
-    """
-    Computes the Intersection over Union (IoU) between two binary masks
-    ------------------------------------------------------------------
-    INPUTS:
-        mask1: npt.NDArray, first binary mask
-        mask2: npt.NDArray, second binary mask
-    OUTPUTS:
-        iou: float, intersection over union value between 0 and 1
-    """
-    intersection = np.logical_and(mask1, mask2).sum()
-    union = np.logical_or(mask1, mask2).sum()
-    return intersection / union if union != 0 else 0
-
-
 def iou_with_list(
     input_list: list[npt.NDArray], iou_thresh: float
-) -> tuple[list[npt.NDArray], list[int]]:
+) -> list[int]:
     """
-    Removes overlapping masks from a list based on IoU threshold
-    ----------------------------------------------------------
+    Return indices (w.r.t. original order) of masks to remove so that
+    overlapping masks (IoU >= iou_thresh) preferentially keep the larger mask.
+    Assumes masks are packed uint8 arrays from np.packbits(axis=0).
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        input_list: list[npt.NDArray], list of binary masks
-        iou_thresh: float, IoU threshold above which masks are considered overlapping
+    	input_list: list[npt.NDArray], list of packed binary masks
+    	iou_thresh: float, IoU threshold above which masks are considered overlapping
     OUTPUTS:
-        kept_list: list[npt.NDArray], list of masks with overlapping ones removed
-        removed_indices: list[int], indices of removed masks
+    	removed_idx: list[int], indices of masks to remove (in original order) to eliminate overlaps
     """
-    # Sort by mask area (smallest first) to preferentially keep larger masks
-    input_list = sorted(input_list, key=lambda x: np.count_nonzero(x))
 
-    to_remove = set()
-    bin_masks = [mask.astype(bool) for mask in input_list]
+    # Precompute popcount table for fast area computation
+    _POPCOUNT = np.array([bin(i).count("1") for i in range(256)], dtype=np.uint8)
 
-    for i in range(len(bin_masks)):
-        if i in to_remove:
-            continue
-        for j in range(i + 1, len(bin_masks)):
-            if j in to_remove:
-                continue
-            iou = compute_iou(bin_masks[i], bin_masks[j])
-            if iou >= iou_thresh:
-                to_remove.add(j)
+    def _area_packed(mask: np.ndarray) -> int:
+        # upcast before sum to avoid uint8 overflow
+        return int(_POPCOUNT[m].astype(np.uint32).sum())
 
-    # Build new list and track removed indices
-    kept_list = [m for idx, m in enumerate(input_list) if idx not in to_remove]
-    removed_indices = sorted(list(to_remove))
+    def _iou_packed(a: np.ndarray, b: np.ndarray) -> float:
+        # Unpack each mask on demand for the pair
+        a_bool = np.unpackbits(a.view(np.uint8), axis=0).astype(bool, copy=False)
+        b_bool = np.unpackbits(b.view(np.uint8), axis=0).astype(bool, copy=False)
+        inter = np.logical_and(a_bool, b_bool).sum()
+        union = np.logical_or(a_bool, b_bool).sum()
+        return (inter / union) if union else 0.0
 
-    return kept_list, removed_indices
+    if not input_list:
+        return []
+
+    # Compute areas for each mask (fast, without unpacking)
+    areas = np.array([_area_packed(m) for m in input_list], dtype=np.int64)
+
+    # Process masks by ascending area index order
+    order = np.argsort(areas, kind="stable")
+    kept_idx = []
+
+    for idx in order:
+        m = input_list[idx]
+        keep = True
+        for j in kept_idx:
+            if _iou_packed(m, input_list[j]) >= iou_thresh:
+                keep = False
+                break
+        if keep:
+            kept_idx.append(idx)
+
+    removed_idx = sorted(set(range(len(input_list))) - set(kept_idx))
+    return removed_idx
 
 
 def predict(
@@ -311,18 +313,18 @@ def predict(
     point_labels: Optional[list] = None,
 ) -> np.ndarray:
     """
-    Implementation of FAIR's SAM using box or point prompts
-    ------------------------------------------------------
+    Implementation of FAIR's SAM using box or point prompts.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        predictor: SAM predictor object, predictive algorithm for segmenting cells
-        image: npt.NDArray, input image for segmentation
-        boxes: Optional[list[list]], list of bounding box coordinates
-        points: Optional[list], list of point coordinates
-        box_prompts: bool, whether to use box prompts for segmentation
-        point_prompts: bool, whether to use point prompts for segmentation
-        point_labels: Optional[list], labels for point prompts (1 for positive, 0 for negative)
+    	predictor: SAM predictor object, predictive algorithm for segmenting cells
+    	image: npt.NDArray, input image for segmentation
+    	boxes: Optional[list[list]], list of bounding box coordinates
+    	points: Optional[list], list of point coordinates
+    	box_prompts: bool, whether to use box prompts for segmentation
+    	point_prompts: bool, whether to use point prompts for segmentation
+    	point_labels: Optional[list], labels for point prompts (1 for positive, 0 for negative)
     OUTPUTS:
-        segmentations: np.ndarray, packed binary masks from SAM prediction
+    	segmentations: np.ndarray, packed binary masks from SAM prediction
     """
     segmentations = []
     if box_prompts == True:
@@ -389,31 +391,31 @@ def crop_regions_predict(
     box_prompts: bool = False,
     to_segment: bool = True,
     threshold_type: str = "single",
-    iou_thresh: Optional[bool] = 0.85,
+    iou_thresh: Optional[float] = 0.85,
 ):
     """
-    Crops regions from DNA and phase microscopy images and generates cell segmentations
-    ---------------------------------------------------------------------------------
+    Crops regions from DNA and phase microscopy images and generates cell segmentations.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        dna_image_stack: npt.NDArray, array of shape (frame_count, x, y) where each frame corresponds to one DNA image
-        phase_image_stack: npt.NDArray, array of shape (frame_count, x, y) where each frame corresponds to one phase image
-        predictor: SAM predictor object, predictive algorithm for segmenting cells
-        threshold_division: float, division factor for threshold calculation
-        sigma: float, sigma value for Gaussian smoothing
-        erosionstruct: any, structuring element for erosion operation
-        tophatstruct: any, structuring element for white top-hat operation
-        box_size: tuple, tuple containing (function, args) for box size determination
-        point_prompts: bool, whether to use point prompts for segmentation
-        box_prompts: bool, whether to use box prompts for segmentation
-        to_segment: bool, whether to perform segmentation
-        threshold_type: str, type of thresholding to use ("single" or "multi")
-        iou_thresh: Optional[bool], IoU threshold for removing overlapping masks
+    	dna_image_stack: npt.NDArray, array of shape (frame_count, x, y) where each frame corresponds to one DNA image
+    	phase_image_stack: npt.NDArray, array of shape (frame_count, x, y) where each frame corresponds to one phase image
+    	predictor: SAM predictor object, predictive algorithm for segmenting cells
+    	threshold_division: float, division factor for threshold calculation
+    	sigma: float, sigma value for Gaussian smoothing
+    	erosionstruct: any, structuring element for erosion operation
+    	tophatstruct: any, structuring element for white top-hat operation
+    	box_size: tuple, tuple containing (function, args) for box size determination
+    	point_prompts: bool, whether to use point prompts for segmentation
+    	box_prompts: bool, whether to use box prompts for segmentation
+    	to_segment: bool, whether to perform segmentation
+    	threshold_type: str, type of thresholding to use ("single" or "multi")
+    	iou_thresh: Optional[float], IoU threshold for removing overlapping masks
     OUTPUTS:
-        dna_regions: npt.NDArray, rank 4 tensor of cropped ROI's indexed as dna_regions[frame][cell]
-        discarded_box_counter: npt.NDArray, vector of integers corresponding to the number of ROI's discarded due to incomplete bounding boxes
-        segmentations: npt.NDArray, rank 4 tensor containing one mask per cell per frame, indexed as segmentations[frame][cell]
-        phs_regions: npt.NDArray, rank 4 tensor of cropped phase image ROI's
-        dna_seg: npt.NDArray, regions containing nucleus masks
+    	dna_regions: npt.NDArray, rank 4 tensor of cropped ROI's indexed as dna_regions[frame][cell]
+    	discarded_box_counter: npt.NDArray, vector of integers corresponding to the number of ROI's discarded due to incomplete bounding boxes
+    	segmentations: npt.NDArray, rank 4 tensor containing one mask per cell per frame, indexed as segmentations[frame][cell]
+    	phs_regions: npt.NDArray, rank 4 tensor of cropped phase image ROI's
+    	dna_seg: npt.NDArray, regions containing nucleus masks
     """
 
     try:
@@ -465,11 +467,14 @@ def crop_regions_predict(
 
             cell_props = frame_props[j]
             y, x = cell_props.centroid
+            # Get the box size for this specific cell
             if isinstance(box_sizes, list):
-                box_sizes = box_sizes[j]
-
-            x1, y1 = x - box_sizes, y + box_sizes  # top left
-            x2, y2 = x + box_sizes, y - box_sizes  # bottom right
+                current_box_size = box_sizes[j]
+            else:
+                current_box_size = box_sizes
+            
+            x1, y1 = x - current_box_size, y + current_box_size  # top left
+            x2, y2 = x + current_box_size, y - current_box_size  # bottom right
             coords_temp = [x1, y2, x2, y1]
 
             if (
@@ -534,10 +539,13 @@ def crop_regions_predict(
                     )
                     segmentations_temp.append(mask)
 
-        segmentations_temp, poped_indices = iou_with_list(
+        poped_indices = iou_with_list(
             segmentations_temp, iou_thresh
         )
-        segmentations.append(segmentations_temp)
+
+        segmentations_temp = [
+            seg for i, seg in enumerate(segmentations_temp) if i not in poped_indices
+        ]
         dna_regions_temp = [
             roi for i, roi in enumerate(dna_regions_temp) if i not in poped_indices
         ]
@@ -549,6 +557,7 @@ def crop_regions_predict(
         ]
 
         discarded_box_counter[i] += len(poped_indices)
+        segmentations.append(segmentations_temp)
         dna_regions.append(dna_regions_temp)
         phs_regions.append(phs_regions_temp)
         dna_seg.append(dna_seg_temp)
@@ -561,209 +570,15 @@ def crop_regions_predict(
     return (dna_regions, discarded_box_counter, segmentations, phs_regions, dna_seg)
 
 
-'''
-def crop_regions_predict_exp(
-    dna_image_stack,
-    phase_image_stack,
-    predictor,
-    threshold_division: float,
-    sigma: float,
-    erosionstruct,
-    tophatstruct,
-    box_size: tuple,
-    point_prompts: bool = True,
-    box_prompts: bool = False,
-    to_segment: bool = True,
-    threshold_type: str = "single",
-    iou_thresh: Optional[bool] = 0.85,
-):
-    """
-    Experimental crop_region_predict using negative prompting points
-    """
-    try:
-        assert dna_image_stack.shape[0] == phase_image_stack.shape[0]
-    except Exception as error:
-        raise AssertionError(
-            "there must be the same number of frames in the dna image and the corresponding phase image"
-        ) from error
-
-    try:
-        assert box_prompts != point_prompts
-    except Exception as error:
-        raise AssertionError(
-            "You must use only one of box prompts and point prompts"
-        ) from error
-
-    discarded_box_counter = np.array([])
-    dna_regions = []
-    phs_regions = []
-    segmentations = []
-    box_size_func = box_size[0]
-    box_size_args = box_size[1]
-    _, dna_image_region_props = preprocess_3d(
-        dna_image_stack,
-        threshold_division,
-        sigma,
-        threshold_type,
-        erosionstruct,
-        tophatstruct,
-    )
-
-    for i, _ in enumerate(dna_image_region_props):  # for each image
-
-        frame_props = dna_image_region_props[f"Frame_{i}"]
-        box_sizes = box_size_wrapper(box_size_func, frame_props, box_size_args)
-        dna_regions_temp = []
-        phs_regions_temp = []
-        segmentations_temp = []
-        centrs = []
-        frames = []
-        discarded_box_counter = np.append(discarded_box_counter, 0)
-
-        for j, _ in enumerate(dna_image_region_props[f"Frame_{i}"]):  # for each cell
-
-            y, x = frame_props[j].centroid
-            if isinstance(box_sizes, list):
-                box_sizes = box_sizes[j]
-
-            x1, y1 = x - box_sizes, y + box_sizes  # top left
-            x2, y2 = x + box_sizes, y - box_sizes  # bottom right
-
-            coords_temp = [x1, y2, x2, y1]
-
-            dna_image = Image.fromarray(dna_image_stack[i, :, :])
-            dna_region = np.asarray(dna_image.crop((x1, y2, x2, y1)))
-            dna_regions_temp.append(dna_region)
-            phs_image = Image.fromarray(phase_image_stack[i, :, :])
-            phs_region = np.asarray(phs_image.crop((x1, y2, x2, y1)))
-            phs_regions_temp.append(phs_region)
-
-            centrs.append([x,y])
-            frames.append(i)
-
-        prev_frame = None
-        if to_segment == True:
-            for k, combo in enumerate(zip(centrs, frames)):
-                centr, frame = combo
-                if (
-                    frame != prev_frame
-                    or prev_frame == None
-                ):
-                    phase_image_rgb = bw_to_rgb(
-                        phase_image_stack[frame, :, :]
-                    )
-                    predictor.set_image(phase_image_rgb)
-                    prev_frame = frame
-
-                if point_prompts == True:
-                    centrs_copy = centrs
-                    points = [centr] + centrs[k+1:k+5]
-                    labels = [1] + list(np.zeros(len(centrs[k+1:k+5])).astype('int'))
-                    mask = predict(
-                        predictor,
-                        phase_image_rgb,
-                        points=points,
-                        point_prompts=True,
-                        point_labels=labels
-                    )
-                    print(np.nansum(mask))
-                    segmentations_temp.append(mask)
-
-            segmentations_temp, poped_indices = iou_with_list(
-                segmentations_temp, iou_thresh
-            )
-
-            poped_indices = []
-            segmentations.append(segmentations_temp)
-        else:
-            poped_indices = []
-            segmentations = []
-
-
-        dna_regions_temp = [
-            roi for i, roi in enumerate(dna_regions_temp) if i not in poped_indices
-        ]
-        phs_regions_temp = [
-            roi for i, roi in enumerate(phs_regions_temp) if i not in poped_indices
-        ]
-        discarded_box_counter[i] += len(poped_indices)
-        dna_regions.append(dna_regions_temp)
-        phs_regions.append(phs_regions_temp)
-
-    dna_regions = np.asarray(dna_regions, dtype=object)
-    phs_regions = np.asarray(phs_regions, dtype=object)
-    segmentations = np.asarray(segmentations, dtype=object)
-
-    return (
-        dna_regions,
-        discarded_box_counter,
-        dna_image_region_props,
-        segmentations,
-        phs_regions,
-    )
-
-
-def clean_regions(
-    regions: npt.NDArray,
-    threshold_division: float,
-    sigma: float,
-    threshold_type: str = "single",
-) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-    """
-    INPUTS:
-          regions: must the output of 'crop_regions', is a dict containg all cropped regions
-          region_props: must be the output of preprocess_3D, is only used in this function for the purpose of indexing
-          discarded_box_counter: must be the output of 'crop_regions' is a dict containing the number of discared boxes per frame,
-                                 is only used in this function for the purposes of indexing
-          threshold_division: float or int
-          sigma: float or int
-
-    OUTPUTS:
-           cleaned_regions: list, rank 4 tensor containing cleaned, binary DNA image ROIs, can be indexed as cleaned_regions[mu][nu] where mu represents the frame and nu represents the cell
-           masks: list, rank 4 tensor containing masks of the central connected region in DNA image ROIs, can be indexed in the same manner as cleaned_regions
-           cleaned_intensity_regions: list, rank 4 tensor containing cleaned, sclar valued DNA image ROIs, can be indexed in the same manner as cleaned_regions
-    """
-    masks = []
-    cleaned_regions = []
-    cleaned_intensity_regions = []
-
-    for i in range(regions.shape[0]):
-        masks_temp = []
-        cleaned_regions_temp = []
-        cleaned_intensity_regions_temp = []
-
-        for region in regions[i]:
-            mask = preprocess_2d(
-                region, threshold_division, sigma, threshold_type
-            )[1]
-            cleaned_mask = clear_border(mask)
-            cleaned_intensity_regions_temp.append(
-                np.multiply(region, cleaned_mask)
-            )
-            cleaned_regions_temp.append(label(cleaned_mask))
-            masks_temp.append(cleaned_mask)
-
-        masks.append(masks_temp)
-        cleaned_regions.append(cleaned_regions_temp)
-        cleaned_intensity_regions.append(cleaned_intensity_regions_temp)
-
-    masks = np.asarray(masks, dtype="object")
-    cleaned_regions = np.asarray(cleaned_regions, dtype="object")
-    cleaned_intensity_regions = np.asarray(cleaned_intensity_regions, dtype="object")
-
-    return cleaned_regions, cleaned_intensity_regions, masks
-'''
-
-
 def add_labels(data_frame: npt.NDArray, labels: npt.NDArray) -> npt.NDArray:
     """
-    Adds labels to a dataframe when labels and dataframe have the same number of rows
-    ------------------------------------------------------------------------------
+    Adds labels to a dataframe when labels and dataframe have the same number of rows.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        data_frame: npt.NDArray, input dataframe
-        labels: npt.NDArray, labels to add to the dataframe
+    	data_frame: npt.NDArray, input dataframe
+    	labels: npt.NDArray, labels to add to the dataframe
     OUTPUTS:
-        data_frame: npt.NDArray, dataframe with one extra column containing the labels
+    	data_frame: npt.NDArray, dataframe with one extra column containing the labels
     """
     if len(labels.shape) == len(data_frame.shape):
         if labels.shape[0] == data_frame.shape[0]:
@@ -778,14 +593,14 @@ def add_labels(data_frame: npt.NDArray, labels: npt.NDArray) -> npt.NDArray:
 
 def binImage(img: npt.NDArray, new_shape: tuple, method: str = "mean") -> npt.NDArray:
     """
-    Bins an image to a new shape using specified method
-    --------------------------------------------------
+    Bins an image to a new shape using specified method.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        img: npt.NDArray, original array to be binned
-        new_shape: tuple, final desired shape of the array
-        method: str, binning method ('min', 'max', or 'mean')
+    	img: npt.NDArray, original array to be binned
+    	new_shape: tuple, final desired shape of the array
+    	method: str, binning method ('min', 'max', or 'mean')
     OUTPUTS:
-        out: npt.NDArray, binned image with the specified new shape
+    	out: npt.NDArray, binned image with the specified new shape
     """
     if len(img.shape) == 3:
         shape = (
@@ -825,13 +640,13 @@ def write_clusters(
     dataframe: npt.NDArray, cluster_coloumn: int
 ) -> dict[Union[str, int], npt.NDArray]:
     """
-    Separates dataframe rows into clusters based on cluster labels
-    ------------------------------------------------------------
+    Separates dataframe rows into clusters based on cluster labels.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        dataframe: npt.NDArray, dataframe containing one column that corresponds to cluster labels
-        cluster_coloumn: int, the index of the column that corresponds to the clustering
+    	dataframe: npt.NDArray, dataframe containing one column that corresponds to cluster labels
+    	cluster_coloumn: int, the index of the column that corresponds to the clustering
     OUTPUTS:
-        clusters: dict[Union[str, int], npt.NDArray], dictionary containing cluster numbers as keys and arrays of [frame, cell] coordinates as values
+    	clusters: dict[Union[str, int], npt.NDArray], dictionary containing cluster numbers as keys and arrays of [frame, cell] coordinates as values
     """
 
     num_clusters = int(dataframe[:, cluster_coloumn].max() + 1)
@@ -853,13 +668,13 @@ def write_clusters(
 
 def square_reshape(img: npt.NDArray, desired_shape: tuple) -> npt.NDArray:
     """
-    Reshapes a square image to desired dimensions
-    --------------------------------------------
+    Reshapes a square image to desired dimensions.
+    ------------------------------------------------------------------------------------------------------
     INPUTS:
-        img: npt.NDArray, input image to be reshaped
-        desired_shape: tuple, target shape for the image
+    	img: npt.NDArray, input image to be reshaped
+    	desired_shape: tuple, target shape for the image
     OUTPUTS:
-        img: npt.NDArray, reshaped image with the desired dimensions
+    	img: npt.NDArray, reshaped image with the desired dimensions
     """
 
     if img.shape[0] < desired_shape[0]:

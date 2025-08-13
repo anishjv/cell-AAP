@@ -8,90 +8,6 @@ from typing import Optional
 from cell_AAP.annotation import annotation_utils  # type:ignore
 
 
-def write_dataset_percent(
-    parent_dir: str,
-    phase_image_stack,
-    segmentations,
-    labeled_data_frame,
-    name: str,
-    label_to_class: dict,
-    bin_size: tuple = (1024, 1024),
-    bin_method: str = "max",
-    train_cutoff: Optional[int] = None
-):
-    """
-    Saves annotations(masks) and images in a manner that can be converted to COCO format using common tools
-    -------------------------------------------------------------------------------------------------------
-    INPUTS:
-            parent_dir: string, directory which folders are to be created within
-            phase_image_stack: n-darray, array containing phase images from which annotions come from
-            segmentations: n-darray, rank 4 tensor indexed as segmentations[mu][nu] where mu references a frame and nu a cell:
-                          contains masks with each mask corresponding to an annotation. (Must be unpacked from bitmap repr)
-            labeled_data_frame: n-darray, dataframe containing region props and classifications for each cell
-            name: string, name of dataset to be created
-            label_to_class: dict, dictionary containing int to string key value pairs, specifying what number classification corresponds to
-                                  what verbal classification, i.e 0-> mitotic
-
-    """
-    if train_cutoff == None:
-        train_cutoff = labeled_data_frame[-int(labeled_data_frame.shape[0] // (10 / 7)), -3]
-    else:
-        pass
-
-    main_path = os.path.join(parent_dir, f"{name}")
-    os.mkdir(main_path)
-    os.chdir(main_path)
-    train_path = os.path.join(main_path, "train")
-    test_path = os.path.join(main_path, "test")
-
-    for i in [train_path, test_path]:
-        os.mkdir(i)
-        os.chdir(i)
-        image_path = os.path.join(i, "images")
-        os.mkdir(image_path)
-        annotation_path = os.path.join(i, "annotations")
-        os.mkdir(annotation_path)
-
-    for j in range(labeled_data_frame.shape[0]):
-        if labeled_data_frame[j, -3] >= train_cutoff:
-            os.chdir(os.path.join(train_path, "annotations"))
-        else:
-            os.chdir(os.path.join(test_path, "annotations"))
-
-        mask = np.unpackbits(
-            segmentations[int(labeled_data_frame[j, -3])][
-                int(labeled_data_frame[j, -2])
-            ],
-            axis=0,
-            count=2048,
-        )
-        mask = mask * 255
-        mask = annotation_utils.binImage(mask, bin_size, bin_method)
-        if labeled_data_frame[j, -1] == 0:
-            cv2.imwrite(
-                f"{int(labeled_data_frame[j, -3])}_{label_to_class[0]}_frame{int(labeled_data_frame[j, -3])}cell{int(labeled_data_frame[j, -2])}.png",
-                mask,
-            )
-        elif labeled_data_frame[j, -1] in [1, 2]:
-            cv2.imwrite(
-                f"{int(labeled_data_frame[j, -3])}_{label_to_class[1]}_frame{int(labeled_data_frame[j, -3])}cell{int(labeled_data_frame[j, -2])}.png",
-                mask,
-            )
-
-    for k in range(int(max(labeled_data_frame[:, -3]))):
-        if k >= train_cutoff:
-            os.chdir(os.path.join(train_path, "images"))
-        else:
-            os.chdir(os.path.join(test_path, "images"))
-
-        image = annotation_utils.binImage(
-            annotation_utils.bw_to_rgb(phase_image_stack[k]), bin_size, bin_method
-        )
-        image = Image.fromarray(image)
-        image.save(f"{k}.jpg")
-
-
-
 
 def write_dataset_ranges(
     parent_dir: str,
@@ -105,91 +21,75 @@ def write_dataset_ranges(
     bin_method: str = "max",
 ):
     """
-    Saves annotations(masks) and images in a manner that can be converted to COCO format using common tools
+    Write a dataset split by inclusive frame ranges: create per-split images/annotations folders and
+    save binned JPG images and unpacked PNG masks for each frame and cell.
     -------------------------------------------------------------------------------------------------------
-    INPUTS:
-            parent_dir: string, directory which folders are to be created within
-            phase_image_stack: n-darray, array containing phase images from which annotions come from
-            segmentations: n-darray, rank 4 tensor indexed as segmentations[mu][nu] where mu references a frame and nu a cell:
-                          contains masks with each mask corresponding to an annotation. (Must be unpacked from bitmap repr)
-            labeled_data_frame: n-darray, dataframe containing region props and classifications for each cell
-            splits: list of tuples with each tuple corresponding to the range of images to be contained in one split of the dataset i.e. train or test split
-            name: string, name of dataset to be created
-            label_to_class: dict, dictionary containing int to string key value pairs, specifying what number classification corresponds to
-                                  what verbal classification, i.e 0-> mitotic
 
+    INPUTS:
+    	parent_dir: str, parent directory within which the dataset directory is created
+    	phase_image_stack: n-darray, stack of grayscale frames indexed by frame (converted to RGB per frame)
+    	segmentations: n-darray or list, per-frame per-cell packed bitmask masks (unpacked via np.unpackbits with count=2048)
+    	labeled_data_frame: n-darray, rows with columns where -3=frame index, -2=cell index, -1=label id
+    	splits: list[tuple[int,int]], inclusive frame ranges (start, end) for each split directory
+    	name: str, name of the dataset directory to create under parent_dir
+    	label_to_class: dict[int,str], maps numeric label ids to class name strings
+    	bin_size: tuple[int,int], output width and height for binning/resizing images and masks
+    	bin_method: str, binning method to use (e.g., "max")
+
+    OUTPUTS:
+    	images: JPEG files, saved to <parent_dir>/<name>/<split>/images/{frame}.jpg
+    	annotations: PNG files, saved to <parent_dir>/<name>/<split>/annotations/{frame}_{class}_frame{frame}cell{cell}.png
     """
 
-    main_path = os.path.join(parent_dir, f"{name}")
-    os.mkdir(main_path)
-    os.chdir(main_path)
+    # Create main dataset directory
+    main_path = os.path.join(parent_dir, name)
+    os.makedirs(main_path, exist_ok=True)
 
-    for i, _ in enumerate(splits):  # for each specified range
-        path = os.path.join(main_path, f"{i}")
-        os.mkdir(path)
-        os.chdir(path)
-        image_path = os.path.join(path, "images")
-        os.mkdir(image_path)
-        annotation_path = os.path.join(path, "annotations")
-        os.mkdir(annotation_path)
-        
-        
-    for l in range(int(max(labeled_data_frame[:, -3]))+1):
-        for m, _ in enumerate(splits):
-            if splits[m][0] <= l <= splits[m][1]:
-                os.chdir(
-                    os.path.join(
-                        os.path.join(
-                            main_path,
-                            f"{m}"
-                        ),
-                        "images"
-                    )
-                )
-                
-                image = annotation_utils.binImage(
-                annotation_utils.bw_to_rgb(phase_image_stack[l]), bin_size, bin_method
-                )
-                image = Image.fromarray(image)
-                image.save(f"{l}.jpg")
+    # Create subdirectories for each split
+    for i in range(len(splits)):
+        os.makedirs(os.path.join(main_path, str(i), "images"), exist_ok=True)
+        os.makedirs(os.path.join(main_path, str(i), "annotations"), exist_ok=True)
+    
+    # Debug: Check label distribution and mapping
+    unique_labels = np.unique(labeled_data_frame[:, -1].astype(int))
+    print(f"Unique label IDs in data: {unique_labels}")
+    print(f"label_to_class mapping: {label_to_class}")
+    
+    # Count -1 labels
+    minus_one_count = np.sum(labeled_data_frame[:, -1] == -1)
+    print(f"Number of cells with label_id -1: {minus_one_count}")
 
-                     
+    # Save images
+    num_frames = int(np.max(labeled_data_frame[:, -3])) + 1
+    for frame in range(num_frames):
+        for split_idx, (start, end) in enumerate(splits):
+            if start <= frame <= end:
+                image_dir = os.path.join(main_path, str(split_idx), "images")
+                image = annotation_utils.bw_to_rgb(phase_image_stack[frame])
+                binned_image = annotation_utils.binImage(image, bin_size, bin_method)
+                image_path = os.path.join(image_dir, f"{frame}.jpg")
+                Image.fromarray(binned_image).save(image_path)
+                break  # Only one split should match
 
+    # Save annotation masks
     for j in range(labeled_data_frame.shape[0]):
-        for k, _ in enumerate(splits): #for each specified range
-            correct_dir = False
-            if splits[k][0] <= labeled_data_frame[j, -3] <= splits[k][1]: #check if the frame is within the correct range
-                os.chdir(
-                    os.path.join(
-                        os.path.join(main_path, f"{k}"), 
-                        "annotations"
-                        )
-                    )
-                correct_dir = True
+        frame = int(labeled_data_frame[j, -3])
+        cell = int(labeled_data_frame[j, -2])
+        label_id = int(labeled_data_frame[j, -1])
+        
+        # Skip invalid label IDs or handle them appropriately
+        if label_id == -1:
+            print(f"Warning: Skipping cell {cell} in frame {frame} with invalid label_id {label_id}")
+            continue
+        
+        classi = label_to_class[label_id]
+        safe_class = str(classi).replace('/', '-')
 
-            if correct_dir == True:
-                mask = np.unpackbits(
-                    segmentations[int(labeled_data_frame[j, -3])][
-                        int(labeled_data_frame[j, -2])
-                    ],
-                    axis=0,
-                    count=2048,
-                )
-                mask = mask * 255
+        for split_idx, (start, end) in enumerate(splits):
+            if start <= frame <= end:
+                annotation_dir = os.path.join(main_path, str(split_idx), "annotations")
+                mask = np.unpackbits(segmentations[frame][cell], axis=0, count=2048) * 255
                 mask = annotation_utils.binImage(mask, bin_size, bin_method)
-                if labeled_data_frame[j, -1] == 0:
-                    cv2.imwrite(
-                        f"{int(labeled_data_frame[j, -3])}_{label_to_class[0]}_frame{int(labeled_data_frame[j, -3])}cell{int(labeled_data_frame[j, -2])}.png",
-                        mask,
-                    )
-                elif labeled_data_frame[j, -1] == 1:
-                    cv2.imwrite(
-                        f"{int(labeled_data_frame[j, -3])}_{label_to_class[1]}_frame{int(labeled_data_frame[j, -3])}cell{int(labeled_data_frame[j, -2])}.png",
-                        mask,
-                    )
-
-                elif labeled_data_frame[j, -1] == 2:
-                    cv2.imwrite(
-                        f"{int(labeled_data_frame[j, -3])}_{label_to_class[2]}_frame{int(labeled_data_frame[j, -3])}cell{int(labeled_data_frame[j, -2])}.png",
-                        mask,
-                    )
+                mask_path = os.path.join(annotation_dir, f"{frame}_{safe_class}_frame{frame}cell{cell}.png")
+                cv2.imwrite(mask_path, mask)
+                break  # Only one split should match
