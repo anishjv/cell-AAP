@@ -187,12 +187,12 @@ def get_box_size_scaled(region_props, max_size: float) -> list[float]:
     return np.asarray(bb_side_lengths) // 2
 
 
-def square_box(centroid: npt.NDArray, box_size: float) -> npt.NDArray:
+def square_box(centroid: list[float], box_size: float) -> npt.NDArray:
     """
     Draws an upright bounding box given a centroid and box size.
     ------------------------------------------------------------------------------------------------------
     INPUTS:
-    	centroid: npt.NDArray, centroid coordinates in the form (y, x)
+    	centroid: list[float], centroid coordinates in the form (y, x)
     	box_size: float, half the side length of the bounding box
     OUTPUTS:
     	coords: npt.NDArray, bounding box coordinates in the form [x1, y2, x2, y1] where (x1, y1) is top-left and (x2, y2) is bottom-right
@@ -468,16 +468,16 @@ def crop_regions_predict(
         for j, _ in enumerate(dna_image_region_props[f"Frame_{i}"]):  # for each cell
 
             cell_props = frame_props[j]
-            y, x = cell_props.centroid
             # Get the box size for this specific cell
             if isinstance(box_sizes, list):
                 current_box_size = box_sizes[j]
             else:
                 current_box_size = box_sizes
-            
-            x1, y1 = x - current_box_size, y + current_box_size  # top left
-            x2, y2 = x + current_box_size, y - current_box_size  # bottom right
-            coords_temp = [x1, y2, x2, y1]
+
+            y, x = cell_props.centroid
+            coords_temp = square_box([y,x], current_box_size)
+            x1, y2, x2, y1 = coords_temp
+
 
             if (
                 all(k >= 0 and k <= dna_image_stack.shape[1] for k in coords_temp)
@@ -532,6 +532,7 @@ def crop_regions_predict(
                         boxes = []
 
                 elif point_prompts == True:
+
                     points = [[x, y]]
                     mask = predict(
                         predictor,
