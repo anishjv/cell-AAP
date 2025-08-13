@@ -5,8 +5,45 @@ import tifffile as tiff
 import gc
 from skimage.measure import regionprops_table
 from annotation_utils import *
-from typing import Optional
+from typing import Optional, Tuple
 from cell_AAP import configs #type: ignore
+
+
+def _process_tiff_image(image_path: str, image_index: Optional[int] = None) -> np.ndarray:
+    """
+    Process a single TIFF image, handling 2D and 3D cases.
+    ------------------------------------------------------------------------------------------------------
+    INPUTS:
+        image_path: str, path to the TIFF image
+        image_index: Optional[int], index for error reporting (None for single file case)
+    OUTPUTS:
+        processed_image: np.ndarray, image in (1, x, y) format
+    """
+    image = tiff.imread(image_path)
+    
+    # Handle 2D TIFF images (rare case)
+    if len(image.shape) == 2:
+        return np.expand_dims(image, axis=0)
+    
+    # Handle 3D TIFF images
+    elif len(image.shape) == 3:
+        # Check if it's multi-frame (z > 1) vs single-frame (z = 1)
+        if image.shape[0] > 1:
+            index_msg = f" at index {image_index}" if image_index is not None else ""
+            raise ValueError(
+                f"Multi-frame TIFF image detected{index_msg}: shape {image.shape}. "
+                "Time-series data is not supported as it can lead to cell duplication in datasets. "
+                "Please provide single-frame images or extract individual frames from your time-series data."
+            )
+        # Single-frame TIFF (1, x, y) - already correct format
+        return image
+    
+    else:
+        index_msg = f" at index {image_index}" if image_index is not None else ""
+        raise ValueError(
+            f"Invalid image format{index_msg}: shape {image.shape}. "
+            "Please provide lists of 2-D images."
+        )
 
 
 class Annotator:
@@ -52,21 +89,13 @@ class Annotator:
                     cv2.imread(str(phase_image_list[i]), cv2.IMREAD_GRAYSCALE) for i, _ in enumerate(phase_image_list)
                 ]
             else:
+                # Use helper function to process TIFF images
                 dna_image_stack = [
-                    tiff.imread(dna_image_list[i]) for i,_ in enumerate(dna_image_list)
+                    _process_tiff_image(dna_image_list[i], i) for i in range(len(dna_image_list))
                 ]
                 phase_image_stack = [
-                    tiff.imread(phase_image_list[i]) for i,_ in enumerate(phase_image_list)
+                    _process_tiff_image(phase_image_list[i], i) for i in range(len(phase_image_list))
                 ]
-                
-                # Check for multi-frame TIFF images in the list
-                for i, (dna_img, phase_img) in enumerate(zip(dna_image_stack, phase_image_stack)):
-                    if len(dna_img.shape) == 3 or len(phase_img.shape) == 3:
-                        raise ValueError(
-                            f"Multi-frame TIFF image detected at index {i}: {dna_img.shape}. "
-                            "Time-series data is not supported as it can lead to cell duplication in datasets. "
-                            "Please provide single-frame images or extract individual frames from your time-series data."
-                        )
             
             # Stack multiple images into a single 3D array
             dna_image_stack = np.stack(dna_image_stack, axis=0)
@@ -82,28 +111,9 @@ class Annotator:
                 dna_image_stack = np.expand_dims(dna_image_stack, axis=0)
                 phase_image_stack = np.expand_dims(phase_image_stack, axis=0)
             else:
-                # TIFF files - can be 2D or 3D
-                dna_image_stack = tiff.imread(dna_image_list[0])
-                phase_image_stack = tiff.imread(phase_image_list[0])
-                
-                # Handle single 2D TIFF images
-                if len(dna_image_stack.shape) == 2 and len(phase_image_stack.shape) == 2:
-                    dna_image_stack = np.expand_dims(dna_image_stack, axis=0)
-                    phase_image_stack = np.expand_dims(phase_image_stack, axis=0)
-                    
-                # Multi-frame TIFF images are not supported due to cell duplication concerns
-                else:
-                    if len(dna_image_stack.shape) == 3 and len(phase_image_stack.shape) == 3:
-                        raise ValueError(
-                            f"Multi-frame TIFF image detected: DNA shape {dna_image_stack.shape}, Phase shape {phase_image_stack.shape}. "
-                            "Time-series data is not supported as it can lead to cell duplication in datasets. "
-                            "Please provide single-frame images or extract individual frames from your time-series data."
-                        )
-                    else:
-                        raise ValueError(
-                            f"Invalid image format: DNA shape {dna_image_stack.shape}, Phase shape {phase_image_stack.shape}. "
-                            "Please provide lists of 2-D images."
-                        )
+                # Use helper function to process TIFF images
+                dna_image_stack = _process_tiff_image(dna_image_list[0])
+                phase_image_stack = _process_tiff_image(phase_image_list[0])
 
         return cls(
             dna_image_list,
