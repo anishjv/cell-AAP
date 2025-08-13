@@ -253,15 +253,14 @@ def iou_with_list(
     input_list: list[npt.NDArray], iou_thresh: float
 ) -> list[int]:
     """
-    Return indices (w.r.t. original order) of masks to remove so that
-    overlapping masks (IoU >= iou_thresh) preferentially keep the larger mask.
-    Assumes masks are packed uint8 arrays from np.packbits(axis=0).
+    Return indices (w.r.t. original order) of non-overlapping masks (IoU < iou_thresh);
+    preferentially keep the larger mask. Uses PyTorch NMS for optimal speed.
     ------------------------------------------------------------------------------------------------------
     INPUTS:
     	input_list: list[npt.NDArray], list of packed binary masks
     	iou_thresh: float, IoU threshold above which masks are considered overlapping
     OUTPUTS:
-    	removed_idx: list[int], indices of masks to remove (in original order) to eliminate overlaps
+    	kept_idx: list[int], indices of masks to keep (in original order) to eliminate overlaps
     """
 
     # Precompute popcount table for fast area computation
@@ -269,39 +268,41 @@ def iou_with_list(
 
     def _area_packed(mask: np.ndarray) -> int:
         m = mask.view(np.uint8)
-        # upcast before sum to avoid uint8 overflow
         return int(_POPCOUNT[m].astype(np.uint32).sum())
 
-    def _iou_packed(a: np.ndarray, b: np.ndarray) -> float:
-        # Unpack each mask on demand for the pair
-        a_bool = np.unpackbits(a.view(np.uint8), axis=0).astype(bool, copy=False)
-        b_bool = np.unpackbits(b.view(np.uint8), axis=0).astype(bool, copy=False)
-        inter = np.logical_and(a_bool, b_bool).sum()
-        union = np.logical_or(a_bool, b_bool).sum()
-        return (inter / union) if union else 0.0
+    def _bbox_from_packed(mask: np.ndarray) -> tuple[int, int, int, int]:
+        """Get bounding box from packed mask"""
+        # Unpack just enough to get bounding box
+        mask_bool = np.unpackbits(mask.view(np.uint8), axis=0).astype(bool, copy=False)
+        rows = np.any(mask_bool, axis=1)
+        cols = np.any(mask_bool, axis=0)
+        y1, y2 = np.where(rows)[0][[0, -1]] if len(rows) > 0 else (0, 0)
+        x1, x2 = np.where(cols)[0][[0, -1]] if len(cols) > 0 else (0, 0)
+        return x1, y1, x2, y2
 
     if not input_list:
         return []
 
-    # Compute areas for each mask (fast, without unpacking)
-    areas = np.array([_area_packed(m) for m in input_list], dtype=np.int64)
+    # Compute areas and bounding boxes
+    areas = np.array([_area_packed(m) for m in input_list], dtype=np.float32)
+    bboxes = [_bbox_from_packed(m) for m in input_list]
+    
+    # Convert to PyTorch tensors
+    boxes_tensor = torch.tensor(bboxes, dtype=torch.float32)
+    scores_tensor = torch.tensor(areas, dtype=torch.float32)
+    
+    # Use PyTorch NMS - it keeps the highest scoring boxes (largest areas)
+    # NMS returns indices of kept boxes
+    kept_indices = torch.ops.torchvision.nms(
+        boxes_tensor, 
+        scores_tensor, 
+        iou_threshold=iou_thresh
+    ).numpy()
+    
+    # Convert to list of kept indices in original order
+    kept_idx = kept_indices.tolist()
 
-    # Process masks by ascending area index order
-    order = np.argsort(areas, kind="stable")
-    kept_idx = []
-
-    for idx in order:
-        m = input_list[idx]
-        keep = True
-        for j in kept_idx:
-            if _iou_packed(m, input_list[j]) >= iou_thresh:
-                keep = False
-                break
-        if keep:
-            kept_idx.append(idx)
-
-    removed_idx = sorted(set(range(len(input_list))) - set(kept_idx))
-    return removed_idx
+    return kept_idx
 
 
 def predict(
@@ -540,24 +541,27 @@ def crop_regions_predict(
                     )
                     segmentations_temp.append(mask)
 
-        poped_indices = iou_with_list(
+        kept_indices = iou_with_list(
             segmentations_temp, iou_thresh
         )
 
+        discarded_box_counter[i] += (
+            len(segmentations_temp) - len(kept_indices)
+        )
+
         segmentations_temp = [
-            seg for i, seg in enumerate(segmentations_temp) if i not in poped_indices
+            seg for i, seg in enumerate(segmentations_temp) if i in kept_indices
         ]
         dna_regions_temp = [
-            roi for i, roi in enumerate(dna_regions_temp) if i not in poped_indices
+            roi for i, roi in enumerate(dna_regions_temp) if i in kept_indices
         ]
         phs_regions_temp = [
-            roi for i, roi in enumerate(phs_regions_temp) if i not in poped_indices
+            roi for i, roi in enumerate(phs_regions_temp) if i in kept_indices
         ]
         dna_seg_temp = [
-            roi for i, roi in enumerate(dna_seg_temp) if i not in poped_indices
+            roi for i, roi in enumerate(dna_seg_temp) if i in kept_indices
         ]
 
-        discarded_box_counter[i] += len(poped_indices)
         segmentations.append(segmentations_temp)
         dna_regions.append(dna_regions_temp)
         phs_regions.append(phs_regions_temp)
