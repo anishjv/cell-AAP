@@ -1,6 +1,7 @@
 import re
 import numpy as np
 import cv2
+from sympy.logic import true
 import tifffile as tiff
 import gc
 from skimage.measure import regionprops_table
@@ -9,21 +10,25 @@ from typing import Optional, Tuple
 from cell_AAP import configs #type: ignore
 
 
-def _process_tiff_image(image_path: str, image_index: Optional[int] = None) -> np.ndarray:
+def _process_tiff_image(image_path: str, image_index: Optional[int] = None, return_2d: bool = False) -> np.ndarray:
     """
     Process a single TIFF image, handling 2D and 3D cases.
     ------------------------------------------------------------------------------------------------------
     INPUTS:
         image_path: str, path to the TIFF image
         image_index: Optional[int], index for error reporting (None for single file case)
+        return_2d: bool, if True return (x, y) format, if False return (1, x, y) format
     OUTPUTS:
-        processed_image: np.ndarray, image in (1, x, y) format
+        processed_image: np.ndarray, image in requested format
     """
     image = tiff.imread(image_path)
     
     # Handle 2D TIFF images (rare case)
     if len(image.shape) == 2:
-        return np.expand_dims(image, axis=0)
+        if return_2d:
+            return image
+        else:
+            return np.expand_dims(image, axis=0)
     
     # Handle 3D TIFF images
     elif len(image.shape) == 3:
@@ -35,8 +40,11 @@ def _process_tiff_image(image_path: str, image_index: Optional[int] = None) -> n
                 "Time-series data is not supported as it can lead to cell duplication in datasets. "
                 "Please provide single-frame images or extract individual frames from your time-series data."
             )
-        # Single-frame TIFF (1, x, y) - already correct format
-        return image
+        # Single-frame TIFF (1, x, y) - convert to requested format
+        if return_2d:
+            return np.squeeze(image, axis=0)
+        else:
+            return image
     
     else:
         index_msg = f" at index {image_index}" if image_index is not None else ""
@@ -89,12 +97,11 @@ class Annotator:
                     cv2.imread(str(phase_image_list[i]), cv2.IMREAD_GRAYSCALE) for i, _ in enumerate(phase_image_list)
                 ]
             else:
-                # Use helper function to process TIFF images
                 dna_image_stack = [
-                    _process_tiff_image(dna_image_list[i], i) for i in range(len(dna_image_list))
+                    _process_tiff_image(dna_image_list[i], i, return_2d=True) for i in range(len(dna_image_list))
                 ]
                 phase_image_stack = [
-                    _process_tiff_image(phase_image_list[i], i) for i in range(len(phase_image_list))
+                    _process_tiff_image(phase_image_list[i], i, return_2d=True) for i in range(len(phase_image_list))
                 ]
             
             # Stack multiple images into a single 3D array
@@ -111,9 +118,8 @@ class Annotator:
                 dna_image_stack = np.expand_dims(dna_image_stack, axis=0)
                 phase_image_stack = np.expand_dims(phase_image_stack, axis=0)
             else:
-                # Use helper function to process TIFF images
-                dna_image_stack = _process_tiff_image(dna_image_list[0])
-                phase_image_stack = _process_tiff_image(phase_image_list[0])
+                dna_image_stack = _process_tiff_image(dna_image_list[0], return_2d=False)
+                phase_image_stack = _process_tiff_image(phase_image_list[0], return_2d=False)
 
         return cls(
             dna_image_list,
