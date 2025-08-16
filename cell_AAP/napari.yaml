@@ -12,9 +12,20 @@ contributions:
       title: Batch Inference GUI
       python_name: cell_AAP.napari.main:create_batch_widget
 
+    - id: cell-AAP.dataset
+      title: Dataset Generation GUI
+      python_name: cell_AAP.napari_dataset.main:create_dataset_generation_widget
+
+    
+
   widgets:
     - command: cell-AAP.run
       display_name: Inference GUI
 
     - command: cell-AAP.batch
       display_name: Batch Inference GUI
+
+    - command: cell-AAP.dataset
+      display_name: Dataset Generation GUI
+
+    

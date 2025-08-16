@@ -66,7 +66,9 @@ def write_dataset_ranges(
             if start <= frame <= end:
                 image_dir = os.path.join(main_path, str(split_idx), "images")
                 image = annotation_utils.bw_to_rgb(phase_image_stack[frame])
+                print('before binning', image.shape)
                 binned_image = annotation_utils.binImage(image, bin_size, bin_method)
+                print('after binning', binned_image.shape)
                 image_path = os.path.join(image_dir, f"{frame}.jpg")
                 Image.fromarray(binned_image).save(image_path)
                 break  # Only one split should match
@@ -88,7 +90,10 @@ def write_dataset_ranges(
         for split_idx, (start, end) in enumerate(splits):
             if start <= frame <= end:
                 annotation_dir = os.path.join(main_path, str(split_idx), "annotations")
-                mask = np.unpackbits(segmentations[frame][cell], axis=0, count=2048) * 255
+                packed = segmentations[frame][cell]
+                # Determine original height from packed rows (rows*8)
+                unpack_count = packed.shape[0] * 8
+                mask = np.unpackbits(packed.astype(np.uint8), axis=0, count=unpack_count) * 255
                 mask = annotation_utils.binImage(mask, bin_size, bin_method)
                 mask_path = os.path.join(annotation_dir, f"{frame}_{safe_class}_frame{frame}cell{cell}.png")
                 cv2.imwrite(mask_path, mask)

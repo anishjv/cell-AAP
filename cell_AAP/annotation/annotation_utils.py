@@ -39,9 +39,11 @@ def preprocess_2d(
     """
 
     im = gaussian(image, sigma)  # 2D gaussian smoothing filter to reduce noise
-    im = white_tophat(
-        im, tophatstruct
-    )  # Background subtraction + uneven illumination correction
+    
+    if isinstance(tophatstruct, np.ndarray):
+        im = white_tophat(im, tophatstruct)
+    else:
+        pass
 
     if isinstance(erosionstruct, np.ndarray):
         im = erosion(im, erosionstruct)
@@ -456,6 +458,7 @@ def crop_regions_predict(
     phs_regions = []
     segmentations = []
     dna_seg = []
+    prompts = []
     boxes = []
     box_size_func = box_size[0]
     box_size_args = box_size[1]
@@ -478,6 +481,7 @@ def crop_regions_predict(
         phs_regions_temp = []
         dna_seg_temp = []
         segmentations_temp = []
+        prompts_temp = []
         discarded_box_counter = np.append(discarded_box_counter, 0)
         sam_current_image = i
         sam_previous_image = None
@@ -552,13 +556,15 @@ def crop_regions_predict(
                     if len(boxes) == batch_size or (j + 1) == len(
                         dna_image_region_props[f"Frame_{i}"]
                     ):
+                        current_batch_boxes = boxes.copy()
                         masks = predict(
                             predictor,
                             None,  # Don't pass RGB image again, SAM already has it
                             boxes=boxes,
                             box_prompts=True,
                         )
-
+                        # Append prompts in same order as masks
+                        prompts_temp.extend(current_batch_boxes)
                         segmentations_temp = masks
                         boxes = []
 
@@ -572,6 +578,7 @@ def crop_regions_predict(
                         point_prompts=True,
                     )
                     segmentations_temp.append(mask)
+                    prompts_temp.append([x, y])
 
         kept_indices = iou_with_list(
             segmentations_temp, iou_thresh
@@ -583,6 +590,9 @@ def crop_regions_predict(
 
         segmentations_temp = [
             seg for i, seg in enumerate(segmentations_temp) if i in kept_indices
+        ]
+        prompts_temp = [
+            prm for i, prm in enumerate(prompts_temp) if i in kept_indices
         ]
         dna_regions_temp = [
             roi for i, roi in enumerate(dna_regions_temp) if i in kept_indices
@@ -598,17 +608,20 @@ def crop_regions_predict(
         dna_regions.append(dna_regions_temp)
         phs_regions.append(phs_regions_temp)
         dna_seg.append(dna_seg_temp)
+        prompts.append(prompts_temp)
 
     # Clear large intermediate data structures
     del labeled_stack, dna_image_region_props
     gc.collect()
     
-    dna_regions = np.asarray(dna_regions, dtype=object)
-    phs_regions = np.asarray(phs_regions, dtype=object)
-    segmentations = np.asarray(segmentations, dtype=object)
-    dna_seg = np.asarray(dna_seg, dtype=object)
+    dtype = object if len(dna_regions) > 1 else 'uint16'
+    dna_regions = np.asarray(dna_regions, dtype=dtype)
+    phs_regions = np.asarray(phs_regions, dtype=dtype)
+    segmentations = np.asarray(segmentations, dtype=dtype)
+    dna_seg = np.asarray(dna_seg, dtype=dtype)
+    prompts = np.asarray(prompts, dtype=dtype)
 
-    return (dna_regions, discarded_box_counter, segmentations, phs_regions, dna_seg)
+    return (dna_regions, discarded_box_counter, segmentations, phs_regions, dna_seg, prompts)
 
 
 def add_labels(data_frame: npt.NDArray, labels: npt.NDArray) -> npt.NDArray:

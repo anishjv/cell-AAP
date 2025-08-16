@@ -4,22 +4,24 @@ import cv2
 from sympy.logic import true
 import tifffile as tiff
 import gc
+import torch
 from skimage.measure import regionprops_table
-from annotation_utils import *
+from cell_AAP.annotation.annotation_utils import crop_regions_predict #type: ignore
 from typing import Optional, Tuple
 from cell_AAP import configs #type: ignore
+from skimage.measure import label
 
 
 def _process_tiff_image(image_path: str, image_index: Optional[int] = None, return_2d: bool = False) -> np.ndarray:
     """
-    Process a single TIFF image, handling 2D and 3D cases.
-    ------------------------------------------------------------------------------------------------------
+    Process a single TIFF image path and return it in the requested shape.
+    -------------------------------------------------------------------------------------------------------
     INPUTS:
-        image_path: str, path to the TIFF image
-        image_index: Optional[int], index for error reporting (None for single file case)
-        return_2d: bool, if True return (x, y) format, if False return (1, x, y) format
+		image_path: str, filesystem path to the TIFF image
+		image_index: Optional[int], optional index for informative error messages
+		return_2d: bool, True for (x, y) arrays, False for (1, x, y) arrays
     OUTPUTS:
-        processed_image: np.ndarray, image in requested format
+		processed_image: np.ndarray, normalized to 2D or 3D stack format
     """
     image = tiff.imread(image_path)
     
@@ -63,6 +65,18 @@ class Annotator:
         phase_image_stack,
         configs:configs.Cfg,
     ):
+        """
+        Initialize Annotator with image lists, stacks, and configuration.
+        -------------------------------------------------------------------------------------------------------
+        INPUTS:
+		dna_image_list: list[str], list of DNA image paths
+		dna_image_stack: np.ndarray, stacked DNA images (n, x, y)
+		phase_image_list: list[str], list of phase image paths
+		phase_image_stack: np.ndarray, stacked phase images (n, x, y)
+		configs: configs.Cfg, configuration object
+        OUTPUTS:
+		None: None
+        """
         self.dna_image_list = dna_image_list
         self.dna_image_stack = dna_image_stack
         self.phase_image_list = phase_image_list
@@ -76,10 +90,21 @@ class Annotator:
         self.to_segment = True
 
     def __str__(self):
+
         return "Instance of class, Processor, implemented to process microscopy images into regions of interest"
 
     @classmethod
     def get(cls, configs:configs.Cfg, dna_image_list:list[str], phase_image_list:list[str]):
+        """
+        Construct an Annotator by loading provided image paths and validating formats.
+        -------------------------------------------------------------------------------------------------------
+        INPUTS:
+		configs: configs.Cfg, configuration object
+		dna_image_list: list[str], paths to DNA images
+		phase_image_list: list[str], paths to phase images (matching length)
+        OUTPUTS:
+		annotator: Annotator, initialized instance ready for crop/gen_df
+        """
 
         try:
             assert len(dna_image_list) == len(phase_image_list)
@@ -131,6 +156,7 @@ class Annotator:
 
     @property
     def dna_image_list(self):
+
         return self._dna_image_list
 
     @dna_image_list.setter
@@ -139,6 +165,7 @@ class Annotator:
 
     @property
     def dna_image_stack(self):
+
         return self._dna_image_stack
 
     @dna_image_stack.setter
@@ -146,14 +173,23 @@ class Annotator:
         self._dna_image_stack = dna_image_stack
 
     def crop(self, predictor=None):
-        if predictor == None:
-            self.to_segment == False
+        """
+        Generate ROIs and segmentations for all frames using optional SAM predictor.
+        -------------------------------------------------------------------------------------------------------
+        INPUTS:
+		predictor: Optional[Any], SAM predictor instance or None for no segmentation
+        OUTPUTS:
+		self: Annotator, with roi/segmentations/cleaned_* fields populated
+        """
+        if predictor is None:
+            self.to_segment = False
         (
             self.roi,
             self.discarded_box_counter,
             self.segmentations,
             self.phs_roi,
-            self.cleaned_binary_roi
+            self.cleaned_binary_roi,
+            self.prompts
         ) = crop_regions_predict(
             self.dna_image_stack,
             self.phase_image_stack,
@@ -172,7 +208,7 @@ class Annotator:
 
 
         self.cleaned_scalar_roi = []
-
+        dtype = object if self.cleaned_binary_roi.shape[0] > 1 else 'uint16'
         for i in range(self.cleaned_binary_roi.shape[0]):
             cleaned_scalar_roi_temp = []
 
@@ -181,8 +217,7 @@ class Annotator:
                 cleaned_scalar_roi_temp.append(cleaned_scalar_roi)
 
             self.cleaned_scalar_roi.append(cleaned_scalar_roi_temp)
-
-        self.cleaned_scalar_roi = np.asarray(self.cleaned_scalar_roi, dtype='object')
+        self.cleaned_scalar_roi = np.asarray(self.cleaned_scalar_roi, dtype=dtype)
 
         # Clear predictor memory after processing
         if predictor is not None:
@@ -202,17 +237,12 @@ class Annotator:
 
     def gen_df(self, extra_props):
         """
-        Given a dictionary of ROI's, this function will generate a dataframe containing values of selected skimage properties, one per ROI.
-        -----------------------------------------------------------------------------------------------------------------------------------
+        Vectorize skimage region properties for each ROI into a structured NumPy array.
+        -------------------------------------------------------------------------------------------------------
         INPUTS:
-            props_list: a list of all the properties (that can be generated from boolean masks) wished to be included in the final dataframe
-            intense_props_list: a list of all the properties (that can be generated from scalar values images) wished to be included in the final dataframe
-            cell_count: list, vector containing one coloumn per frame of the image stack of interest, the value of each key is the number of cells on that frame
-            cleaned_regions: list, rank 4 tensor containing cleaned, binary DNA image ROIs, can be indexed as cleaned_regions[mu][nu] where mu represents the frame and nu represents the cell
-            cleaned_intensity_regions: list, rank 4 tensor containing cleaned, sclar valued DNA image ROIs, can be indexed in the same manner as cleaned_regions
-
+		extra_props: list[callable], additional extra_properties for regionprops_table
         OUTPUTS:
-            main_df: a vectorized dataframe containing the values for each property for each cell in 'cleaned_regions'. The dataframe stores no knowledge of the frame from which a cell came.
+		main_df: np.ndarray, rows of properties per cell with [.., frame_index, cell_index]
         """
         try:
             assert self.cropped == True
@@ -225,22 +255,26 @@ class Annotator:
         except Exception as error:
             raise AssertionError("props_list must be of type 'list'") from error
 
-
         main_df = []
 
         for i in range(self.cleaned_binary_roi.shape[0]):
             for j, region in enumerate(self.cleaned_binary_roi[i]):
                 if region.any() != 0:
+
+                    intensity_img = self.cleaned_scalar_roi[i][j]
                     props = regionprops_table(
-                        region.astype("uint8"),
-                        intensity_image=self.cleaned_scalar_roi[i][j],
-                        properties=self.configs.propslist,
-                        extra_properties=extra_props,
-                    )
+                            label(region),
+                            intensity_image=intensity_img,
+                            properties=self.configs.propslist
+                        )
 
                     df = np.asarray(list(props.values())).T[0]
                     tracker = [i, j]
                     df = np.append(df, tracker)
                     main_df.append(df)
 
-        return np.asarray(main_df)
+
+        if main_df:
+            return np.asarray(main_df)
+        else:
+            return np.array([])

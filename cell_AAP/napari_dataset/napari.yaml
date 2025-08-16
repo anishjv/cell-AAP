@@ -1,0 +1,13 @@
+name: cell-AAP Dataset Generation
+display_name: Cell-APP Dataset Generation
+contributions:
+  commands:
+    - id: cell-AAP.dataset-generation.create-widget
+      title: Create Dataset Generation Widget
+      python_name: cell_AAP.napari_dataset.main:create_dataset_generation_widget
+    
+  widgets:
+    - command: cell-AAP.dataset-generation.create-widget
+      display_name: Dataset Generation
+      autogenerate: true
+    
