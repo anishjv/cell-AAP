@@ -61,27 +61,49 @@ class DatasetGenerationWidget(QtWidgets.QScrollArea):
         file_layout = QtWidgets.QFormLayout()
         
         # DNA file selection
-        self.dna_selector = QtWidgets.QPushButton("Select DNA Images")
-        self.dna_selector.setToolTip("Select one or more DNA image files")
+        self.dna_selector = QtWidgets.QPushButton("Select prompt-creation images")
+        self.dna_selector.setToolTip("Select one or more files")
         file_layout.addRow(self.dna_selector)
         
         # DNA file list display
         self.dna_file_list = QtWidgets.QListWidget()
         self.dna_file_list.setMaximumHeight(100)
+        # Enable drag-and-drop reordering
+        self.dna_file_list.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.dna_file_list.setDragEnabled(True)
+        self.dna_file_list.setAcceptDrops(True)
+        self.dna_file_list.setDropIndicatorShown(True)
+        self.dna_file_list.setDragDropMode(QtWidgets.QAbstractItemView.InternalMove)
         file_layout.addRow(self.dna_file_list)
         
         # Phase file selection
-        self.phase_selector = QtWidgets.QPushButton("Select Phase Images")
-        self.phase_selector.setToolTip("Select one or more phase image files")
+        self.phase_selector = QtWidgets.QPushButton("Select transmitted-light images")
+        self.phase_selector.setToolTip("Select one or more files")
         file_layout.addRow(self.phase_selector)
         
         # Phase file list display
         self.phase_file_list = QtWidgets.QListWidget()
         self.phase_file_list.setMaximumHeight(100)
+        # Enable drag-and-drop reordering
+        self.phase_file_list.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.phase_file_list.setDragEnabled(True)
+        self.phase_file_list.setAcceptDrops(True)
+        self.phase_file_list.setDropIndicatorShown(True)
+        self.phase_file_list.setDragDropMode(QtWidgets.QAbstractItemView.InternalMove)
         file_layout.addRow(self.phase_file_list)
         
         file_group.setLayout(file_layout)
         self._main_layout.addWidget(file_group)
+        
+        # Connect model row-moved to update underlying file lists
+        try:
+            self.dna_file_list.model().rowsMoved.connect(self._on_dna_list_reordered)
+        except Exception:
+            pass
+        try:
+            self.phase_file_list.model().rowsMoved.connect(self._on_phase_list_reordered)
+        except Exception:
+            pass
 
     def _create_configuration_widgets(self):
         """
@@ -231,14 +253,18 @@ class DatasetGenerationWidget(QtWidgets.QScrollArea):
         for file_path in self.dna_files:
             parts = str(file_path).split('/')
             display = '/'.join(parts[-2:]) if len(parts) >= 2 else parts[-1]
-            self.dna_file_list.addItem(display)
+            item = QtWidgets.QListWidgetItem(display)
+            item.setData(Qt.UserRole, file_path)
+            self.dna_file_list.addItem(item)
         
         # Update phase file list
         self.phase_file_list.clear()
         for file_path in self.phase_files:
             parts = str(file_path).split('/')
             display = '/'.join(parts[-2:]) if len(parts) >= 2 else parts[-1]
-            self.phase_file_list.addItem(display)
+            item = QtWidgets.QListWidgetItem(display)
+            item.setData(Qt.UserRole, file_path)
+            self.phase_file_list.addItem(item)
 
     def update_config_path(self, file_path: str):
         """
@@ -308,3 +334,20 @@ class DatasetGenerationWidget(QtWidgets.QScrollArea):
             self.next_result_button.setEnabled(False)
             self.save_button.setEnabled(False)
             self.coco_button.setEnabled(False)
+
+    # Handle list reordering to keep underlying arrays in sync
+    def _on_dna_list_reordered(self, *args):
+        new_order = []
+        for i in range(self.dna_file_list.count()):
+            item = self.dna_file_list.item(i)
+            path = item.data(Qt.UserRole) or item.text()
+            new_order.append(path)
+        self.dna_files = new_order
+
+    def _on_phase_list_reordered(self, *args):
+        new_order = []
+        for i in range(self.phase_file_list.count()):
+            item = self.phase_file_list.item(i)
+            path = item.data(Qt.UserRole) or item.text()
+            new_order.append(path)
+        self.phase_files = new_order

@@ -159,7 +159,7 @@ def get_box_size(
     dna_major_axis = np.median(np.asarray(major_axis))
     bb_side_length = scaling_factor * dna_major_axis
 
-    print("The bounding box side length was", bb_side_length, "pixels")
+    print(f"Bounding box side length: {bb_side_length:.2f} px")
     return bb_side_length // 2
 
 
@@ -348,7 +348,7 @@ def predict(
                 "Must provide input bounding boxes if box_propmts = True has been selected"
             ) from error
 
-        input_boxes = torch.tensor(boxes, device=predictor.device)
+        input_boxes = torch.tensor(np.asarray(boxes), device=predictor.device)
         # Get image shape from predictor if image is None
         if image is None:
             # SAM already has the image set, get shape from predictor
@@ -451,15 +451,12 @@ def crop_regions_predict(
             "You must use only one of box prompts and point prompts"
         ) from error
 
-    # Reduce batch size to minimize memory usage
-    batch_size = 10  # Reduced from 50
     discarded_box_counter = np.array([])
     dna_regions = []
     phs_regions = []
     segmentations = []
     dna_seg = []
     prompts = []
-    boxes = []
     box_size_func = box_size[0]
     box_size_args = box_size[1]
 
@@ -473,10 +470,13 @@ def crop_regions_predict(
         tophatstruct,
     )
 
+    total_frames = dna_image_stack.shape[0]
+
     for i, _ in enumerate(dna_image_region_props):  # for each image
 
         frame_props = dna_image_region_props[f"Frame_{i}"]
         box_sizes = box_size_wrapper(box_size_func, frame_props, box_size_args)
+        print(f"Processing image {i+1}/{total_frames}: found {len(frame_props)} candidate cells")
         dna_regions_temp = []
         phs_regions_temp = []
         dna_seg_temp = []
@@ -509,14 +509,9 @@ def crop_regions_predict(
             coords_temp = square_box([y,x], current_box_size)
             x1, y2, x2, y1 = coords_temp
 
-
-            if (
-                all(k >= 0 and k <= dna_image_stack.shape[1] for k in coords_temp)
-                == False
-            ):
+            if not all(k >= 0 and k <= dna_image_stack.shape[1] for k in coords_temp):
+                discarded_box_counter[i] += 1
                 continue
-            else:
-                pass
 
             dna_region = dna_image_stack[i, int(y2) : int(y1), int(x1) : int(x2)]
             dna_regions_temp.append(dna_region)
@@ -546,27 +541,15 @@ def crop_regions_predict(
 
                 if box_prompts == True:
 
-                    if all(
-                        k >= 0 and k <= dna_image_stack.shape[1] for k in coords_temp
-                    ):
-                        boxes.append(coords_temp)
-                    else:
-                        discarded_box_counter[i] += 1
-
-                    if len(boxes) == batch_size or (j + 1) == len(
-                        dna_image_region_props[f"Frame_{i}"]
-                    ):
-                        current_batch_boxes = boxes.copy()
-                        masks = predict(
-                            predictor,
-                            None,  # Don't pass RGB image again, SAM already has it
-                            boxes=boxes,
-                            box_prompts=True,
-                        )
-                        # Append prompts in same order as masks
-                        prompts_temp.extend(current_batch_boxes)
-                        segmentations_temp = masks
-                        boxes = []
+                    mask = predict(
+                        predictor,
+                        None,  # Don't pass RGB image again, SAM already has it
+                        boxes=[coords_temp],
+                        box_prompts=True,
+                    )
+                    # Append prompts in same order as masks
+                    segmentations_temp.extend(mask)
+                    prompts_temp.append(np.array(coords_temp, dtype=float))
 
                 elif point_prompts == True:
 
@@ -584,9 +567,7 @@ def crop_regions_predict(
             segmentations_temp, iou_thresh
         )
 
-        discarded_box_counter[i] += (
-            len(segmentations_temp) - len(kept_indices)
-        )
+        discarded_box_counter[i] += (len(segmentations_temp) - len(kept_indices))
 
         segmentations_temp = [
             seg for i, seg in enumerate(segmentations_temp) if i in kept_indices
@@ -609,6 +590,9 @@ def crop_regions_predict(
         phs_regions.append(phs_regions_temp)
         dna_seg.append(dna_seg_temp)
         prompts.append(prompts_temp)
+
+        kept = len(segmentations_temp)
+        print(f"Image {i+1}/{total_frames}: kept {kept} cells")
 
     # Clear large intermediate data structures
     del labeled_stack, dna_image_region_props

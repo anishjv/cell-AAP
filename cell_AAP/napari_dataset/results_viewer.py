@@ -29,7 +29,7 @@ def display_current_result(widget) -> None:
         if 'full_phase_images' in widget.results and len(widget.results['full_phase_images']) > current_idx:
             phase_data = widget.results['full_phase_images'][current_idx]
             if phase_data is not None:
-                widget.viewer.add_image(phase_data, name="Phase Image", colormap="gray")
+                widget.viewer.add_image(phase_data, name="Transmitted-light image", colormap="gray")
                 
                 # Display segmentations if available
                 if 'segmentations' in widget.results and len(widget.results['segmentations']) > current_idx:
@@ -43,13 +43,13 @@ def display_current_result(widget) -> None:
                                 unpack_count = seg.shape[0] * 8
                                 mask = np.unpackbits(seg.astype(np.uint8), axis=0, count=unpack_count).astype(bool, copy=False)
                                 combined_seg[mask] = cell_idx + 1
-                        widget.viewer.add_labels(combined_seg.astype(np.uint32), name="Segmentations")
+                        widget.viewer.add_labels(combined_seg.astype(np.uint32), name="Segmentations", opacity=0.1)
         
         # Display full DNA image and prompts
         if 'full_dna_images' in widget.results and len(widget.results['full_dna_images']) > current_idx:
             dna_data = widget.results['full_dna_images'][current_idx]
             if dna_data is not None:
-                widget.viewer.add_image(dna_data, name="DNA Image", colormap="gray")
+                widget.viewer.add_image(dna_data, name="Prompt-creation image", colormap="gray")
                 
                 prompts_all = widget.results.get('prompts')
                 if prompts_all is not None and len(prompts_all) > current_idx:
@@ -64,9 +64,13 @@ def display_current_result(widget) -> None:
                                 points = np.stack([arr[:, 1], arr[:, 0]], axis=1).astype(float)
                                 widget.viewer.add_points(points, name="Prompts (points)", size=6, face_color='red', edge_color='black')
                             elif ncols == 4:
+                                # Boxes [x1, y2, x2, y1] -> rectangle corners
                                 shapes = []
                                 for row in arr:
-                                    x1, y2, x2, y1 = row.tolist()
+                                    row_list = row.tolist() if isinstance(row, np.ndarray) else list(row)
+                                    if len(row_list) != 4:
+                                        continue
+                                    x1, y2, x2, y1 = row_list
                                     shapes.append([[y1, x1], [y1, x2], [y2, x2], [y2, x1]])
                                 widget.viewer.add_shapes(shapes, shape_type='rectangle', name="Prompts (boxes)", edge_color='red', face_color='transparent')
         
