@@ -4,7 +4,7 @@
 
 ## Description
 Cell-APP automates the generation of cell masks (and classifications too!), enabling users to create 
-custom instance segmentation training dataset in transmitted-light microscopy. To learn more, read our preprint: https://www.biorxiv.org/content/10.1101/2025.01.23.634498v2. 
+custom instance segmentation training datasets in transmitted-light microscopy. To learn more, read our preprint: https://www.biorxiv.org/content/10.1101/2025.01.23.634498v2. 
 
 ## Usage 
 1. Users who wish to segment HeLa, U2OS, HT1080, or RPE-1 cell lines may try our pre-trained model. These models can be used through our GUI (see **Installation**) and their weights can be downloaded at: https://zenodo.org/communities/cellapp/records?q=&l=list&p=1&s=10. To learn about using pre-trained models through the GUI, see this video: 
@@ -46,7 +46,7 @@ Once a conda distribution has been installed:
 
 1. To open napari simply type "napari" into the command line, ensure that you are working the correct environment
 2. To instantiate the plugin, navigate to the "Plugins" menu and hover over "cell-AAP"
-3. You should see three plugin options; two relate to *Usage 1*; one relate to *Usage 2*. 
+3. You should see three plugin options; two relate to *Usage 1*; one relates to *Usage 2*. 
 
 
 

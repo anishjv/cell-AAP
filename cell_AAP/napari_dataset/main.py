@@ -1,6 +1,5 @@
 from __future__ import annotations
 import logging
-import sys
 import napari
 import napari.utils.notifications
 import cell_AAP.napari_dataset.ui as ui  # type:ignore
@@ -18,6 +17,7 @@ from typing import Optional, List, Dict, Any
 from qtpy.QtWidgets import QMessageBox
 import skimage.morphology as morph
 from cell_AAP.annotation import annotation_utils as au  # type: ignore
+from cell_AAP.napari_dataset import zenodo_uploader  # type: ignore
 
 __all__ = [
     "create_dataset_generation_widget",
@@ -106,6 +106,11 @@ def create_dataset_generation_widget() -> ui.DatasetGenerationWidget:
     # Connect COCO assembly
     dataset_widget.coco_button.clicked.connect(
         lambda: assemble_coco_dataset(dataset_widget)
+    )
+    
+    # Connect Share to Zenodo (PAT flow)
+    dataset_widget.share_button.clicked.connect(
+        lambda: share_dataset_to_zenodo(dataset_widget)
     )
 
     return dataset_widget
@@ -298,27 +303,36 @@ def assemble_coco_dataset(dataset_widget: ui.DatasetGenerationWidget) -> None:
     if not ok or not name:
         return
 
-    # 2. Train/test splits as inclusive ranges
-    train_range, ok = QInputDialog.getText(dataset_widget, "Train Split", "Enter train range as start,end:")
-    if not ok or not train_range:
-        return
-    test_range, ok = QInputDialog.getText(dataset_widget, "Test Split", "Enter test range as start,end:")
-    if not ok or not test_range:
-        return
-    try:
-        t0, t1 = [int(x.strip()) for x in train_range.split(',')]
-        v0, v1 = [int(x.strip()) for x in test_range.split(',')]
-    except Exception:
-        napari.utils.notifications.show_error("Invalid ranges. Use integers: start,end")
-        return
-    if not (t0 <= t1 and v0 <= v1):
-        napari.utils.notifications.show_error("Each range must satisfy start <= end")
-        return
-    # Verify no overlap (inclusive ranges)
-    if max(t0, v0) <= min(t1, v1):
-        napari.utils.notifications.show_error("Train and test ranges must not overlap")
-        return
-    splits = [(t0, t1), (v0, v1)]
+    # 2. Train/Test/Validation splits as inclusive ranges; allow 'none'
+    def parse_range(label: str) -> Optional[tuple[int, int]]:
+        text, ok_local = QInputDialog.getText(dataset_widget, f"{label} Split", f"Enter {label.lower()} range as start,end or 'none':")
+        if not ok_local or not text:
+            return None
+        if text.strip().lower() == 'none':
+            return None
+        try:
+            s0, s1 = [int(x.strip()) for x in text.split(',')]
+        except Exception:
+            napari.utils.notifications.show_error("Invalid range. Use integers: start,end or 'none'")
+            return None
+        if not (s0 <= s1):
+            napari.utils.notifications.show_error("Each range must satisfy start <= end")
+            return None
+        return (s0, s1)
+
+    tr = parse_range('Train')
+    te = parse_range('Test')
+    va = parse_range('Validation')
+    ranges_map: Dict[str, Optional[tuple[int, int]]] = {"train": tr, "test": te, "validation": va}
+    # ensure non-overlap among provided ranges
+    provided = [(k, v) for k, v in ranges_map.items() if v is not None]
+    for i in range(len(provided)):
+        for j in range(i + 1, len(provided)):
+            (k1, (a0, a1)) = provided[i]
+            (k2, (b0, b1)) = provided[j]
+            if max(a0, b0) <= min(a1, b1):
+                napari.utils.notifications.show_error(f"{k1} and {k2} ranges must not overlap")
+                return
 
     # 3. Class name (single)
     class_name, ok = QInputDialog.getText(dataset_widget, "Class Name", "Enter single class name:")
@@ -326,10 +340,11 @@ def assemble_coco_dataset(dataset_widget: ui.DatasetGenerationWidget) -> None:
         return
     label_to_class = {0: class_name}
 
-    # 4. Save directory
-    save_dir = QFileDialog.getExistingDirectory(dataset_widget, "Select Dataset Save Directory")
-    if not save_dir:
-        return
+    # 4. Stage in temp dir, zip to Desktop
+    import tempfile
+    desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+    os.makedirs(desktop, exist_ok=True)
+    temp_parent = tempfile.mkdtemp(prefix="cellapp_coco_")
 
     # Prepare labeled df: append label=0 to each row
     df_whole = dataset_widget.results['df_whole']
@@ -348,13 +363,16 @@ def assemble_coco_dataset(dataset_widget: ui.DatasetGenerationWidget) -> None:
     phase_image_stack = np.asarray(phase_image_stack)
 
     try:
-        # Write images and annotations per split
+        # Build splits list in a deterministic order of present splits
+        split_keys = [k for k in ["train", "validation", "test"] if ranges_map[k] is not None]
+        split_ranges = [ranges_map[k] for k in split_keys]
+        # write using numeric split indices then rename
         dw.write_dataset_ranges(
-            save_dir,
+            temp_parent,
             phase_image_stack,
             segmentations,
             df_whole_labeled,
-            splits,
+            split_ranges,  # type: ignore
             name,
             label_to_class,
         )
@@ -362,31 +380,107 @@ def assemble_coco_dataset(dataset_widget: ui.DatasetGenerationWidget) -> None:
         napari.utils.notifications.show_error(f"Dataset write failed: {str(e)}")
         return
 
-    # Write COCO JSONs for train (split 0) and test (split 1)
+    # Rename numeric split dirs to their names and write COCO JSONs for present splits
     try:
-        base_path = os.path.join(save_dir, name)
-        # train
-        train_dir = os.path.join(base_path, '0')
-        write_coco_json(
-            images_dir=os.path.join(train_dir, 'images'),
-            annotations_dir=os.path.join(train_dir, 'annotations'),
-            out_json=os.path.join(train_dir, f"{name}_train.json"),
-            categories=[{"id": 1, "name": class_name}],
-            dataset_info={"description": name, "version": "1.0", "split": "train"}
-        )
-        # test
-        test_dir = os.path.join(base_path, '1')
-        write_coco_json(
-            images_dir=os.path.join(test_dir, 'images'),
-            annotations_dir=os.path.join(test_dir, 'annotations'),
-            out_json=os.path.join(test_dir, f"{name}_test.json"),
-            categories=[{"id": 1, "name": class_name}],
-            dataset_info={"description": name, "version": "1.0", "split": "test"}
-        )
-        napari.utils.notifications.show_info("COCO datasets created (train/test)")
+        base_path = os.path.join(temp_parent, name)
+        # rename 0,1,2 -> ordered present split names
+        ordered_present = [k for k in ["train", "validation", "test"] if ranges_map[k] is not None]
+        for idx, split_name in enumerate(ordered_present):
+            old = os.path.join(base_path, str(idx))
+            new = os.path.join(base_path, split_name)
+            if os.path.isdir(old) and not os.path.isdir(new):
+                os.rename(old, new)
+        # write JSONs for each present split
+        for split_name in ordered_present:
+            split_dir = os.path.join(base_path, split_name)
+            write_coco_json(
+                images_dir=os.path.join(split_dir, 'images'),
+                annotations_dir=os.path.join(split_dir, 'annotations'),
+                out_json=os.path.join(split_dir, f"{name}_{'val' if split_name=='validation' else split_name}.json"),
+                categories=[{"id": 1, "name": class_name}],
+                dataset_info={"description": name, "version": "1.0", "split": split_name}
+            )
+        napari.utils.notifications.show_info("COCO dataset assembled")
     except Exception as e:
         napari.utils.notifications.show_error(f"COCO conversion failed: {str(e)}")
+        return
 
+    # Zip to Desktop
+    try:
+        zip_path = _zip_dataset_folder(temp_parent, name)
+        # Move resulting zip to Desktop
+        final_zip = os.path.join(desktop, os.path.basename(zip_path))
+        if os.path.abspath(zip_path) != os.path.abspath(final_zip):
+            if os.path.exists(final_zip):
+                os.remove(final_zip)
+            os.replace(zip_path, final_zip)
+        dataset_widget.last_assembled_zip_path = final_zip
+        dataset_widget.last_assembled_name = name
+        dataset_widget.share_button.setEnabled(True)
+        QMessageBox.information(dataset_widget, "COCO Assembled", f"Saved zip to Desktop:\n{final_zip}")
+    except Exception as e:
+        napari.utils.notifications.show_error(f"Failed to zip/move dataset: {str(e)}")
+        return
+
+
+def _zip_dataset_folder(base_dir: str, dataset_name: str) -> str:
+    import zipfile
+    archive_path = os.path.join(base_dir, f"{dataset_name}.zip")
+    root_dir = os.path.join(base_dir, dataset_name)
+    with zipfile.ZipFile(archive_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for dirpath, _, filenames in os.walk(root_dir):
+            for fname in filenames:
+                full = os.path.join(dirpath, fname)
+                rel = os.path.relpath(full, base_dir)
+                zf.write(full, rel)
+    return archive_path
+
+
+def share_dataset_to_zenodo(dataset_widget: ui.DatasetGenerationWidget) -> None:
+    from qtpy.QtWidgets import QInputDialog
+    # Ensure a recently assembled zip exists
+    if not getattr(dataset_widget, 'last_assembled_zip_path', None):
+        napari.utils.notifications.show_error("No assembled dataset zip found. Please run 'Assemble COCO Dataset' first.")
+        return
+    name = getattr(dataset_widget, 'last_assembled_name', None) or 'CellAPP_Dataset'
+    zip_path = dataset_widget.last_assembled_zip_path
+
+    # Prompt for Zenodo PAT & minimal metadata
+    pat, ok = QInputDialog.getText(dataset_widget, "Zenodo Personal Access Token", "Enter your Zenodo PAT (deposit scope):")
+    if not ok or not pat:
+        return
+    title, ok = QInputDialog.getText(dataset_widget, "Title", "Dataset title:")
+    if not ok or not title:
+        return
+    description, ok = QInputDialog.getMultiLineText(dataset_widget, "Description", "Short description:")
+    if not ok:
+        return
+    creators_str, ok = QInputDialog.getText(dataset_widget, "Creators", "Creators as 'Name1;Name2' (optional affiliations in description):")
+    if not ok:
+        return
+    creators: List[Dict[str, str]] = []
+    for part in [c.strip() for c in creators_str.split(';') if c.strip()]:
+        creators.append({"name": part})
+    if not creators:
+        creators = [{"name": "Unknown"}]
+    
+    try:
+        record_url = zenodo_uploader.upload_dataset_zip(
+            pat=pat,
+            zip_path=zip_path,  # assembled zip on Desktop
+            title=title or name,
+            description=description or name,
+            creators=creators,
+            keywords=["Cell-APP", "cell segmentation", "COCO"],
+            license_id="cc-by-4.0",
+            community_identifier="cellapp_external",
+            publish=True,
+        )
+        napari.utils.notifications.show_info(f"Uploaded to Zenodo: {record_url}")
+        QMessageBox.information(dataset_widget, "Zenodo Upload", f"Upload complete.\n{record_url}")
+    except Exception as e:
+        napari.utils.notifications.show_error(f"Zenodo upload failed: {str(e)}")
+        QMessageBox.critical(dataset_widget, "Zenodo Upload Failed", str(e))
 
 def load_sam_predictor(dataset_widget: ui.DatasetGenerationWidget) -> None:
     """
@@ -475,6 +569,3 @@ def resolve_and_fetch_checkpoint(model_key: str) -> str:
     fetcher = pooch.create(path=pooch.os_cache("cell_aap_sam"), base_url=f"doi:{doi}", registry={filename: None})
     local_path = fetcher.fetch(filename)
     return local_path
-
-
-    # Registry editing removed per requirements

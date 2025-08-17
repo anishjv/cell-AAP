@@ -3,7 +3,6 @@ from napari.viewer import Viewer
 from qtpy import QtWidgets
 from qtpy.QtCore import Qt
 from typing import Optional, List, Dict, Any
-import numpy as np
 
 
 class DatasetGenerationWidget(QtWidgets.QScrollArea):
@@ -33,6 +32,8 @@ class DatasetGenerationWidget(QtWidgets.QScrollArea):
         self.config_file_path = None
         self.results = {}
         self.current_result_index = 0
+        self.last_assembled_zip_path = None
+        self.last_assembled_name = None
 
         self.setWidgetResizable(True)
         self._main_layout = QtWidgets.QVBoxLayout()
@@ -45,6 +46,26 @@ class DatasetGenerationWidget(QtWidgets.QScrollArea):
         self._create_configuration_widgets()
         self._create_processing_widgets()
         self._create_results_widgets()
+        self._create_footer_widgets()
+
+    def _create_footer_widgets(self):
+        """
+        Create a footer row with a small Share Dataset button aligned to the bottom-right.
+        """
+        footer_layout = QtWidgets.QHBoxLayout()
+        footer_layout.setContentsMargins(0, 0, 0, 0)
+        footer_layout.addStretch(1)
+        # Share dataset (Zenodo upload via PAT) in the bottom-right
+        self.share_button = QtWidgets.QPushButton("Share dataset")
+        self.share_button.setToolTip("Package and upload your dataset to Zenodo (requires a Personal Access Token)")
+        self.share_button.setEnabled(False)
+        self.share_button.setStyleSheet(
+            "QPushButton { background-color: #0B8457; color: white; font-weight: bold; padding: 4px 10px; font-size: 10px; }\n"
+            "QPushButton:disabled { background-color: rgba(154, 51, 36, 0.15); color: rgba(255,255,255,0.6); }"
+        )
+        self.share_button.setFixedHeight(28)
+        footer_layout.addWidget(self.share_button)
+        self._main_layout.addLayout(footer_layout)
 
     def _create_file_selection_widgets(self):
         """
@@ -182,7 +203,7 @@ class DatasetGenerationWidget(QtWidgets.QScrollArea):
         processing_layout = QtWidgets.QVBoxLayout()
         
         # Process button
-        self.process_button = QtWidgets.QPushButton("Generate Dataset")
+        self.process_button = QtWidgets.QPushButton("Generate dataset")
         self.process_button.setToolTip("Run the complete dataset generation pipeline")
         self.process_button.setStyleSheet("QPushButton { background-color: #9A3324; color: white; font-weight: bold; padding: 8px; }")
         processing_layout.addWidget(self.process_button)
@@ -222,19 +243,30 @@ class DatasetGenerationWidget(QtWidgets.QScrollArea):
         results_layout.addLayout(nav_layout)
         
         # Save button
-        self.save_button = QtWidgets.QPushButton("Save Results")
+        self.save_button = QtWidgets.QPushButton("Save results")
         self.save_button.setToolTip("Save all generated results as numpy arrays")
         self.save_button.setEnabled(False)
-        self.save_button.setStyleSheet("QPushButton { background-color: #575294; color: white; font-weight: bold; padding: 8px; }")
+        self.save_button.setStyleSheet(
+            "QPushButton { background-color: #575294; color: white; font-weight: bold; padding: 8px; }\n"
+            "QPushButton:disabled { background-color: rgba(154, 51, 36, 0.15); color: rgba(255,255,255,0.6); }"
+        )
         results_layout.addWidget(self.save_button)
 
-        # Assemble COCO Dataset
-        self.coco_button = QtWidgets.QPushButton("Assemble COCO Dataset")
+        # Assemble COCO Dataset (full row)
+        self.coco_button = QtWidgets.QPushButton("Assemble COCO dataset")
         self.coco_button.setToolTip("Assemble COCO-style train/test datasets from current results")
         self.coco_button.setEnabled(False)
-        self.coco_button.setStyleSheet("QPushButton { background-color: #2F65A7; color: white; font-weight: bold; padding: 8px; }")
-        results_layout.addWidget(self.coco_button)
+        self.coco_button.setStyleSheet(
+            "QPushButton { background-color: #2F65A7; color: white; font-weight: bold; padding: 6px 12px; font-size: 12px; }\n"
+            "QPushButton:disabled { background-color: rgba(154, 51, 36, 0.15); color: rgba(255,255,255,0.6); }"
+        )
         
+        # Button heights
+        self.coco_button.setFixedHeight(34)
+
+        # Original layout: Assemble button full row under Save
+        results_layout.addWidget(self.coco_button)
+
         results_group.setLayout(results_layout)
         self._main_layout.addWidget(results_group)
 
@@ -284,24 +316,6 @@ class DatasetGenerationWidget(QtWidgets.QScrollArea):
             self.config_path_label.setText("No configuration file selected")
             self.config_path_label.setStyleSheet("color: gray;")
 
-    def update_extra_props_path(self, file_path: str):
-        """
-        Update the extra properties file path display label and internal path.
-        -------------------------------------------------------------------------------------------------------
-        INPUTS:
-		file_path: str, absolute path to the extra properties Python file
-        OUTPUTS:
-		None: None
-        """
-        if file_path:
-            self.extra_props_file_path = file_path
-            self.extra_props_path_label.setText(file_path)
-            self.extra_props_path_label.setStyleSheet("color: black;")
-        else:
-            self.extra_props_file_path = None
-            self.extra_props_path_label.setText("No extra properties file selected")
-            self.extra_props_path_label.setStyleSheet("color: gray;")
-
     # No checkpoint UI; selection is resolved via registry at load time
 
     def update_result_counter(self):
@@ -328,12 +342,14 @@ class DatasetGenerationWidget(QtWidgets.QScrollArea):
                 self.next_result_button.setEnabled(False)
                 self.save_button.setEnabled(False)
                 self.coco_button.setEnabled(False)
+                self.share_button.setEnabled(False)
         else:
             self.result_counter_label.setText("No results")
             self.prev_result_button.setEnabled(False)
             self.next_result_button.setEnabled(False)
             self.save_button.setEnabled(False)
             self.coco_button.setEnabled(False)
+            self.share_button.setEnabled(False)
 
     # Handle list reordering to keep underlying arrays in sync
     def _on_dna_list_reordered(self, *args):

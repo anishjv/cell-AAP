@@ -121,22 +121,3 @@ def select_existing_config(widget) -> None:
     )
     if file:
         widget.update_config_path(file)
-
-
-def select_existing_extra_props(widget) -> None:
-    """
-    Browse for an existing extra properties Python file and set it.
-    -------------------------------------------------------------------------------------------------------
-    INPUTS:
-		widget: QtWidgets.QWidget, parent widget receiving the selection
-    OUTPUTS:
-		None: None, updates widget extra props path
-    """
-    file, _ = QFileDialog.getOpenFileName(
-        widget,
-        "Select Existing Extra Properties File",
-        "",
-        "Python Files (*.py);;All Files (*)"
-    )
-    if file:
-        widget.update_extra_props_path(file)
