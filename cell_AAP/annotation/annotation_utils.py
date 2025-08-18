@@ -7,11 +7,14 @@ from skimage.measure import regionprops, label
 from skimage.morphology import white_tophat, square, erosion
 from skimage.filters import (
     gaussian,
-    threshold_isodata,
+    threshold_isodata,  
     threshold_multiotsu,
 )  # pylint: disable=no-name-in-module
+from skimage.segmentation import watershed
+from skimage.feature import peak_local_max
 from typing import Optional, Union
 import scipy
+from scipy.ndimage import distance_transform_edt
 import gc  # Add garbage collection import
 
 
@@ -30,7 +33,7 @@ def preprocess_2d(
     	image: npt.NDArray, input image to preprocess
     	threshold_division: float, division factor for threshold calculation
     	sigma: float, sigma value for Gaussian smoothing
-    	threshold_type: Optional[str], type of thresholding ("single" or "multi")
+    	threshold_type: Optional[str], type of thresholding ("single", "multi", or "watershed")
     	erosionstruct: Optional[any], structuring element for erosion operation
     	tophatstruct: Optional[any], structuring element for white top-hat operation
     OUTPUTS:
@@ -50,14 +53,48 @@ def preprocess_2d(
     else:
         pass
 
-    if threshold_type == "multi":
-        thresholds = threshold_multiotsu(im)
-        redseg = np.digitize(im, bins=thresholds)
-    else:
+    # Common thresholding logic for both "single" and "watershed" methods
+    if threshold_type in ["single", "watershed"]:
         thresh = threshold_isodata(im)
         redseg = im > (thresh / threshold_division)
-
-    labels = label(redseg)
+        labels = label(redseg)
+        
+        if threshold_type == "watershed":
+            # Use the labeled masks from "single" method to estimate cell count and spacing
+            num_cells = labels.max() if labels.max() > 0 else 1
+            image_area = im.shape[0] * im.shape[1]
+            
+            # Estimate average cell area and diameter
+            avg_cell_area = np.sum(redseg) / num_cells
+            avg_cell_diameter = np.sqrt(avg_cell_area / np.pi) * 2
+            
+            # Set minimum distance as a fraction of average cell diameter
+            min_distance = int(avg_cell_diameter * 0.4)  # 40% of average cell diameter
+            min_distance = max(5, min(min_distance, int(image_area**0.5 * 0.1)))  # Clamp between 5 and 10% of image diagonal
+            
+            # Create distance transform for watershed markers
+            binary_mask = redseg.astype(bool)
+            distance = distance_transform_edt(binary_mask)
+            
+            # Find local maxima as watershed markers
+            coords = peak_local_max(
+                distance, 
+                min_distance=min_distance,
+                threshold_abs=0.1 * distance.max()
+            )
+            
+            # Create markers image
+            markers = np.zeros_like(binary_mask, dtype=int)
+            markers[coords[:, 0], coords[:, 1]] = np.arange(1, len(coords) + 1)
+            
+            # Apply watershed
+            labels = watershed(-distance, markers, mask=binary_mask)
+            redseg = (labels > 0).astype(np.uint8)
+    
+    elif threshold_type == "multi":
+        thresholds = threshold_multiotsu(im)
+        redseg = np.digitize(im, bins=thresholds)
+        labels = label(redseg)
 
     return labels, redseg
 
@@ -77,7 +114,7 @@ def preprocess_3d(
     	targetstack: npt.NDArray, stack of images with shape (z, n, n)
     	threshold_division: float, division factor for threshold calculation
     	sigma: int, sigma value for Gaussian smoothing
-    	threshold_type: Optional[str], type of thresholding to use ("single" or "multi")
+    	threshold_type: Optional[str], type of thresholding to use ("single", "multi", or "watershed")
     	erosionstruct: Optional[any], structuring element for erosion operation
     	tophatstruct: Optional[any], structuring element for white top-hat operation
     OUTPUTS:
@@ -159,7 +196,6 @@ def get_box_size(
     dna_major_axis = np.median(np.asarray(major_axis))
     bb_side_length = scaling_factor * dna_major_axis
 
-    print(f"Bounding box side length: {bb_side_length:.2f} px")
     return bb_side_length // 2
 
 
@@ -217,7 +253,7 @@ def square_box(centroid: list[float], box_size: float) -> npt.NDArray:
 
 def box_size_wrapper(func, frame_props, args):
     """
-    Facilitates the usage of different box size determination functions.
+    Facilitates the usage of different boxes size determination functions.
     ------------------------------------------------------------------------------------------------------
     INPUTS:
     	func: callable, function to determine box sizes
@@ -476,7 +512,7 @@ def crop_regions_predict(
 
         frame_props = dna_image_region_props[f"Frame_{i}"]
         box_sizes = box_size_wrapper(box_size_func, frame_props, box_size_args)
-        print(f"Processing image {i+1}/{total_frames}: found {len(frame_props)} candidate cells")
+        print(f"Image {i+1}/{total_frames}: found {len(frame_props)} candidate cells")
         dna_regions_temp = []
         phs_regions_temp = []
         dna_seg_temp = []
@@ -496,6 +532,11 @@ def crop_regions_predict(
                 torch.cuda.empty_cache()
             gc.collect()
 
+        # Print box size info for non-list case (single box size for all cells)
+        if not isinstance(box_sizes, list):
+            print(f"Image {i+1}/{total_frames}: current box size is  {2* box_sizes} pixels")
+        
+
         for j, _ in enumerate(dna_image_region_props[f"Frame_{i}"]):  # for each cell
 
             cell_props = frame_props[j]
@@ -504,7 +545,7 @@ def crop_regions_predict(
                 current_box_size = box_sizes[j]
             else:
                 current_box_size = box_sizes
-
+            
             y, x = cell_props.centroid
             coords_temp = square_box([y,x], current_box_size)
             x1, y2, x2, y1 = coords_temp

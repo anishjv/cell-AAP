@@ -247,7 +247,7 @@ class DatasetGenerationWidget(QtWidgets.QScrollArea):
         self.save_button.setToolTip("Save all generated results as numpy arrays")
         self.save_button.setEnabled(False)
         self.save_button.setStyleSheet(
-            "QPushButton { background-color: #575294; color: white; font-weight: bold; padding: 8px; }\n"
+            "QPushButton { background-color: #9A3324; color: white; font-weight: bold; padding: 8px; }\n"
             "QPushButton:disabled { background-color: rgba(154, 51, 36, 0.15); color: rgba(255,255,255,0.6); }"
         )
         results_layout.addWidget(self.save_button)
@@ -257,7 +257,7 @@ class DatasetGenerationWidget(QtWidgets.QScrollArea):
         self.coco_button.setToolTip("Assemble COCO-style train/test datasets from current results")
         self.coco_button.setEnabled(False)
         self.coco_button.setStyleSheet(
-            "QPushButton { background-color: #2F65A7; color: white; font-weight: bold; padding: 6px 12px; font-size: 12px; }\n"
+            "QPushButton { background-color: #9A3324; color: white; font-weight: bold; padding: 6px 12px; font-size: 12px; }\n"
             "QPushButton:disabled { background-color: rgba(154, 51, 36, 0.15); color: rgba(255,255,255,0.6); }"
         )
         

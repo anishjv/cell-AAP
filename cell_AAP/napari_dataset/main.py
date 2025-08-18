@@ -493,34 +493,22 @@ def load_sam_predictor(dataset_widget: ui.DatasetGenerationWidget) -> None:
     """
     try:
         selection = dataset_widget.sam_model_selector.currentText()
-        print(f"[SAM DEBUG] selection={selection}")
         registry = get_zenodo_registry()
-        print(f"[SAM DEBUG] registry keys={list(registry.keys())}")
         entry = registry.get(selection)
-        print(f"[SAM DEBUG] registry entry={entry}")
         if selection not in registry:
             napari.utils.notifications.show_error("Invalid model selection")
             return
         # Determine SAM backbone (first two tokens joined: vit_h, vit_l, vit_b)
         parts = selection.split("_")
         backbone = "_".join(parts[:2])
-        print(f"[SAM DEBUG] parsed backbone={backbone}")
         ckpt = resolve_and_fetch_checkpoint(selection)
-        print(f"[SAM DEBUG] checkpoint path={ckpt} exists={os.path.exists(ckpt)}")
         from segment_anything import sam_model_registry, SamPredictor  # type: ignore
-        print(f"[SAM DEBUG] available backbones in registry={list(sam_model_registry.keys())}")
         sam = sam_model_registry[backbone](checkpoint=ckpt)
-        print(f"[SAM DEBUG] SAM class={sam.__class__.__name__}")
         import torch
         use_cuda = torch.cuda.is_available()
-        print(f"[SAM DEBUG] torch.cuda.is_available()={use_cuda}")
         if use_cuda:
             sam.to(device="cuda")
-            print("[SAM DEBUG] moved SAM to device=cuda")
-        else:
-            print("[SAM DEBUG] using device=cpu")
         predictor = SamPredictor(sam)
-        print(f"[SAM DEBUG] Predictor class={predictor.__class__.__name__}")
         dataset_widget.predictor = predictor
         napari.utils.notifications.show_info(f"Loaded SAM ({selection})")
     except Exception as e:
