@@ -265,7 +265,8 @@ class Annotator:
                     props = regionprops_table(
                             label(region),
                             intensity_image=intensity_img,
-                            properties=self.configs.propslist
+                            properties=self.configs.propslist,
+                            extra_properties=extra_props
                         )
 
                     df = np.asarray(list(props.values())).T[0]
