@@ -4,7 +4,11 @@
 
 ## Description
 Cell-APP automates the generation of cell masks (and classifications too!), enabling users to create 
-custom instance segmentation training datasets in transmitted-light microscopy. To learn more, read our preprint: https://www.biorxiv.org/content/10.1101/2025.01.23.634498v2. 
+custom instance segmentation training datasets in transmitted-light microscopy. 
+
+To learn more, read our preprint: https://www.biorxiv.org/content/10.1101/2025.01.23.634498v2.
+
+For questions regarding installation or usage, contact: anishjv@umich.edu
 
 ## Usage 
 1. Users who wish to segment HeLa, U2OS, HT1080, or RPE-1 cell lines may try our pre-trained model. These models can be used through our GUI (see **Installation**) and their weights can be downloaded at: https://zenodo.org/communities/cellapp/records?q=&l=list&p=1&s=10. To learn about using pre-trained models through the GUI, see this video: 
@@ -14,33 +18,44 @@ custom instance segmentation training datasets in transmitted-light microscopy. 
 2. Users who wish to segment their own cell lines may: (a) try our "general" model (GUI/weight download) or (b) 
 train a custom model by creating an instance segmentation dataset via our *Dataset Generation GUI* (see **Installation**). To learn about creating custom datasets through the GUI, see this video: 
 
-## Installation 
-We highly recommend installing cell-APP in a clean conda environment. To do so, you must have [miniconda](https://docs.anaconda.com/free/miniconda/#quick-command-line-install) or [anaconda](https://docs.anaconda.com/free/anaconda/) installed.
+## Installation
 
-Once a conda distribution has been installed:
+`cell-AAP` requires Python **3.11–3.12**. We recommend installing into a clean virtual environment (via `conda` or `venv`) to avoid dependency conflicts.
 
-1. Create and activate a clean environment 
+### 1. Create and activate an environment
 
-        conda create -n cell-aap-env python=3.11.0
-        conda activate cell-app-env
+With **conda**:
+```bash
+conda create -n cellapp -c conda-forge python=3.11
+conda activate cellapp
+```
 
-2. Within this environment, install pip
+Or with **venv**:
+```bash 
+python -m venv cellapp
+source cellapp/bin/activate  # Linux/Mac
+cellapp\Scripts\activate     # Windows PowerShell
+```
 
-        conda install pip
+### 2. Install Pytorch:
+```bash
+conda install -c pytorch -c conda-forge pytorch torchvision #Mac
+pip install torch torchvision #Linux/Windows
+```
 
-3. Then install the package from PyPi (the package bears the name "cell-AAP;" a historical quirk)
-
-        pip install cell-AAP --upgrade
-
-4. Finally detectron2 must be built from source, atop cell-AAP
+### 3. Install Cell-APP:
+```bash
+pip install cell-AAP
+```
+### 4. Finally, detectron2 must be built from source atop Cell-APP:
+```bash
     
-        #For MacOS
-        CC=clang CXX=clang++ ARCHFLAGS="-arch arm64" python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
+#Mac
+CC=clang CXX=clang++ ARCHFLAGS="-arch arm64" python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
 
-        #For other operating systems 
-        python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
-
-
+#Linux/Windows
+ python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
+```
 
 ## Napari Plugin Usage
 

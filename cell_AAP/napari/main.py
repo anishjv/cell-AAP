@@ -139,10 +139,15 @@ def inference(
     labels = output["instances"].pred_classes.to("cpu").numpy()
     scores = output["instances"].scores.to("cpu").numpy()
     scores = (scores*100).astype('uint16')
-    classes = output['instances'].pred_classes.to("cpu").numpy()
+    
+    #temp custom dict creation for 3 classes; need to make this more general
+    if 2 in np.unique(labels):
+        custom_dict = {0: 1, 2: 100, 1: 200}
+    else:
+        custom_dict = {0: 1, 1: 100}
 
     seg_fordisp = color_masks(
-        segmentations, labels, method="custom", custom_dict={0: 1, 1: 100}
+        segmentations, labels, method="custom", custom_dict=custom_dict
     )
 
     seg_fortracking = color_masks(segmentations, labels, method="random")
@@ -158,7 +163,7 @@ def inference(
 
         centroids.append(centroid)
 
-    return seg_fordisp, seg_fortracking, centroids, img, seg_scores, classes
+    return seg_fordisp, seg_fortracking, centroids, img, seg_scores, labels
 
 
 def run_inference(cellaap_widget: ui.cellAAPWidget):
