@@ -1,12 +1,10 @@
 from __future__ import annotations
 import logging
-import sys
 import napari
 import napari.utils.notifications
 import cell_AAP.napari.ui as ui  # type:ignore
 import cell_AAP.annotation.annotation_utils as au  # type:ignore
 import cell_AAP.napari.fileio as fileio  # type: ignore
-import cell_AAP.napari.analysis as analysis  # type: ignore
 
 import numpy as np
 import torch
@@ -21,8 +19,6 @@ from detectron2.config import get_cfg
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import LazyConfig, instantiate
 from typing import Optional
-from omegaconf.listconfig import ListConfig
-import torch.serialization
 
 setup_logger()
 
@@ -123,11 +119,13 @@ def inference(
     """
 
     if cellaap_widget.model_type == "yacs":
+        img = au.bw_to_rgb(img)
         output = cellaap_widget.predictor(img.astype("float32"))
 
     else:
         if img.shape == (2048, 2048):
             img = au.square_reshape(img, (1024, 1024))
+            img = au.bw_to_rgb(img)
         img_perm = np.moveaxis(img, -1, 0)
 
         with torch.inference_mode():
@@ -142,6 +140,7 @@ def inference(
     
     #temp custom dict creation for 3 classes; will fail if image is converted to 8-bit and has more than 3 classes!
     custom_dict  = {key: key*100 for key in np.unique(labels)}
+    custom_dict[0] = 1
     seg_fordisp = color_masks(
         segmentations, labels, method="custom", custom_dict=custom_dict
     )
@@ -206,7 +205,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             prog_count += 1
             frame += cellaap_widget.range_slider.value()[0]
             cellaap_widget.progress_bar.setValue(prog_count)
-            img = au.bw_to_rgb(im_array[frame])
+            img = im_array[frame]
             semantic_seg, instance_seg, centroids, img, scores_seg, classes= inference(
                 cellaap_widget, img, frame - cellaap_widget.range_slider.value()[0]
             )
@@ -369,16 +368,17 @@ def get_model(cellaap_widget):
     model_name = cellaap_widget.model_selector.currentText()
 
     url_registry = {
-        "HeLa": "doi:10.5281/zenodo.15587924",
-        "HeLa_focal": "doi:10.5281/zenodo.15587884",
-        "HT1080_focal": "doi:10.5281/zenodo.15632609",
-        "HT1080": "doi:10.5281/zenodo.15632636",
-        "RPE1_focal": "doi:10.5281/zenodo.15632647",
-        "RPE1": "doi:10.5281/zenodo.15632661",
-        "U2OS_focal": "doi:10.5281/zenodo.15632668",
-        "U2OS": "doi:10.5281/zenodo.15632681",
-        "general": "doi:10.5281/zenodo.15707118",
-    }
+            "HeLa": "doi:10.5281/zenodo.15587924",
+            "HeLa_focal": "doi:10.5281/zenodo.15587884",
+            "HT1080_focal": "doi:10.5281/zenodo.15632609",
+            "HT1080": "doi:10.5281/zenodo.15632636",
+            "RPE1_focal": "doi:10.5281/zenodo.15632647",
+            "RPE1": "doi:10.5281/zenodo.15632661",
+            "U2OS_focal": "doi:10.5281/zenodo.15632668",
+            "U2OS": "doi:10.5281/zenodo.15632681",
+            "general": "doi:10.5281/zenodo.15707118",
+            "HeLa_dead": "doi:10.5281/zenodo.16945394"
+        }
 
     weights_registry = {
         "HeLa": (
@@ -416,6 +416,10 @@ def get_model(cellaap_widget):
         "general": (
             "model_0061499.pth",
             "md5:62e5f4be12227146f6a9841ada46526a"
+        ),       
+        "HeLa_dead": (
+            "model_0080999.pth",
+            "md5:51de7b8ff94aca5deb774b9cd75421f4"
         )
 
     }
@@ -423,7 +427,7 @@ def get_model(cellaap_widget):
     configs_registry = {
         "HeLa": (
             "config.yaml",
-            "md5:320852546ed1390ed2e8fa91008e8bf7",
+            "md5:3e7a6a92045434e4fb7fe25b321749bb",
             "lazy"
         ),
         "HeLa_focal": (
@@ -465,6 +469,11 @@ def get_model(cellaap_widget):
             "config.yaml",
             "md5:ad609c147ea2cd7d7fde0d734de2e166",
             "lazy"
+        ),
+        "HeLa_dead": (
+            "config.yaml",
+            "md5:74b102fff4e3118d6b1ec563520c2fe0",
+            "lazy"
         )
 
     }
@@ -503,7 +512,7 @@ def color_masks(
     OUTPUTS:
         seg_labeled: np.ndarray
     """
-    
+
     if method == "custom":
         try:
             assert custom_dict != None
@@ -527,7 +536,7 @@ def color_masks(
             if method == "custom":
                 seg_labeled[mask] += custom_dict[labels[i]]
 
-            if method == "straight":
+            elif method == "straight":
                 seg_labeled[mask] += labels[i]
 
             else:

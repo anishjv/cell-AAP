@@ -91,6 +91,7 @@ def get_model(model_name:str):
         "U2OS_focal": "doi:10.5281/zenodo.15632668",
         "U2OS": "doi:10.5281/zenodo.15632681",
         "general": "doi:10.5281/zenodo.15707118",
+        "HeLa_dead": "doi:10.5281/zenodo.16945394"
     }
 
     weights_registry = {
@@ -129,6 +130,10 @@ def get_model(model_name:str):
         "general": (
             "model_0061499.pth",
             "md5:62e5f4be12227146f6a9841ada46526a"
+        ),       
+        "HeLa_dead": (
+            "model_0080999.pth",
+            "md5:51de7b8ff94aca5deb774b9cd75421f4"
         )
 
     }
@@ -136,7 +141,7 @@ def get_model(model_name:str):
     configs_registry = {
         "HeLa": (
             "config.yaml",
-            "md5:320852546ed1390ed2e8fa91008e8bf7",
+            "md5:3e7a6a92045434e4fb7fe25b321749bb",
             "lazy"
         ),
         "HeLa_focal": (
@@ -177,6 +182,11 @@ def get_model(model_name:str):
         "general": (
             "config.yaml",
             "md5:ad609c147ea2cd7d7fde0d734de2e166",
+            "lazy"
+        ),
+        "HeLa_dead": (
+            "config.yaml",
+            "md5:74b102fff4e3118d6b1ec563520c2fe0",
             "lazy"
         )
 
@@ -325,8 +335,10 @@ def inference(
     scores = (scores*100).astype('uint16')
     classes = output['instances'].pred_classes.to("cpu").numpy()
 
+    custom_dict  = {key: key*100 for key in np.unique(labels)}
+    custom_dict[0] = 1
     seg_fordisp = color_masks(
-        segmentations, labels, method="custom", custom_dict={0: 1, 1: 100}
+        segmentations, labels, method="custom", custom_dict=custom_dict
     )
 
     scores_mov = color_masks(segmentations, scores, method="straight")
