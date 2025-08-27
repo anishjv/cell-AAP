@@ -138,9 +138,7 @@ def inference(
     scores = output["instances"].scores.to("cpu").numpy()
     scores = (scores*100).astype('uint16')
     
-    #temp custom dict creation for 3 classes; will fail if image is converted to 8-bit and has more than 3 classes!
-    custom_dict  = {key: key*100 for key in np.unique(labels)}
-    custom_dict[0] = 1
+    custom_dict  = {key: key+99 for key in np.unique(labels)}
     seg_fordisp = color_masks(
         segmentations, labels, method="custom", custom_dict=custom_dict
     )

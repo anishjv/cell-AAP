@@ -14,6 +14,7 @@ import skimage.measure
 import tifffile as tiff
 import os
 import pandas as pd
+from cell_AAP.napari.main import color_masks #type:ignore
 
 
 
@@ -335,8 +336,7 @@ def inference(
     scores = (scores*100).astype('uint16')
     classes = output['instances'].pred_classes.to("cpu").numpy()
 
-    custom_dict  = {key: key*100 for key in np.unique(labels)}
-    custom_dict[0] = 1
+    custom_dict  = {key: key+99 for key in np.unique(labels)}
     seg_fordisp = color_masks(
         segmentations, labels, method="custom", custom_dict=custom_dict
     )
