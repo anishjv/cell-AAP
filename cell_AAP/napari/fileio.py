@@ -71,16 +71,20 @@ def grab_file(cellaap_widget: ui.cellAAPWidget):
         filter=file_filter,
     ) #type:ignore
 
-    cellaap_widget.full_spectrum_files = file_names
-
-    try:
-        shape = tiff.imread(file_names[0]).shape
-        napari.utils.notifications.show_info(
-            f"File: {file_names[0]} is queued for inference/analysis"
-        )
-        cellaap_widget.range_slider.setRange(min=0, max=shape[0] - 1)
-        cellaap_widget.range_slider.setValue((0, shape[1]))
-    except AttributeError or IndexError:
+    if file_names:
+        cellaap_widget.full_spectrum_files = file_names
+        cellaap_widget.image_path = file_names[0]  # Store the selected image path
+        
+        try:
+            shape = tiff.imread(file_names[0]).shape
+            napari.utils.notifications.show_info(
+                f"File: {file_names[0]} is queued for inference/analysis"
+            )
+            cellaap_widget.range_slider.setRange(min=0, max=shape[0] - 1)
+            cellaap_widget.range_slider.setValue((0, shape[1]))
+        except AttributeError or IndexError:
+            napari.utils.notifications.show_error("No file was selected")
+    else:
         napari.utils.notifications.show_error("No file was selected")
 
 
@@ -89,15 +93,21 @@ def grab_directory(cellaap_widget):
     Initiates a QtWidget.QFileDialog instance and grabs a directory
     -----------------------------------------------------------
     INPUTS:
-        cellaap_widget: instance of ui.cellAAPWidget()I
+        cellaap_widget: instance of ui.cellAAPWidget()
     """
 
     dir_grabber = QtWidgets.QFileDialog.getExistingDirectory(
         parent=cellaap_widget, caption="Select a directory to save inference result"
     )
 
-    cellaap_widget.dir_grabber = dir_grabber
-    napari.utils.notifications.show_info(f"Directory: {dir_grabber} has been selected")
+    if dir_grabber:
+        cellaap_widget.dir_grabber = dir_grabber
+        cellaap_widget.save_path = dir_grabber  # Store the save path
+        napari.utils.notifications.show_info(f"Directory: {dir_grabber} has been selected")
+        return dir_grabber
+    else:
+        napari.utils.notifications.show_error("No directory was selected")
+        return ""
 
 
 def save(cellaap_widget):
@@ -112,13 +122,17 @@ def save(cellaap_widget):
             "No Directory has been selected - will save output to current working directory"
         )
         filepath = os.getcwd()
-        pass
 
+    # Check if save combo box has items
+    if cellaap_widget.save_combo_box.count() == 0:
+        napari.utils.notifications.show_error("No inference results to save")
+        return
 
     inference_result_name = cellaap_widget.save_combo_box.currentText()
+    
     inference_result = list(
         filter(
-            lambda x: x["name"] in f"{inference_result_name}",
+            lambda x: x["name"] == f"{inference_result_name}",
             cellaap_widget.inference_cache,
         )
     )[0]
@@ -134,16 +148,8 @@ def save(cellaap_widget):
     inference_folder_path = os.path.join(filepath, inference_result_name + "_inference")
     os.mkdir(inference_folder_path)
 
-    '''
-    scores = inference_result['scores']
-    classes = inference_result['classes']
-    confidence = np.asarray([scores, classes])
-    confidence_df = pd.DataFrame(confidence.T, columns = ['scores','classes'])
-    confidence_df.to_excel(
-        os.path.join(inference_folder_path, analysis_file_prefix + "analysis.xlsx"), sheet_name = "confidence"
-    )
-    '''
-
+    # Always save the three essential movies
+    # Save scores movie
     tiff.imwrite(
         os.path.join(
             inference_folder_path, analysis_file_prefix + "scores_movie.tif"
@@ -151,7 +157,7 @@ def save(cellaap_widget):
         inference_result["scores_movie"],
     )
 
-
+    # Save semantic movie
     tiff.imwrite(
         os.path.join(
             inference_folder_path, analysis_file_prefix + "semantic_movie.tif"
@@ -160,6 +166,7 @@ def save(cellaap_widget):
         dtype="uint16",
     )
 
+    # Save instance movie (tracking results)
     tiff.imwrite(
         os.path.join(
             inference_folder_path, analysis_file_prefix + "instance_movie.tif"
@@ -167,6 +174,8 @@ def save(cellaap_widget):
         inference_result["instance_movie"],
         dtype="uint16",
     )
+
+    napari.utils.notifications.show_info(f"Results saved to: {inference_folder_path}")
 
 def add(cellaap_widget: ui.cellAAPWidget):
     "Adds a movie to the batch worker"

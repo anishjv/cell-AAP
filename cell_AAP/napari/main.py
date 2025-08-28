@@ -57,6 +57,7 @@ def create_cellAAP_widget(batch: Optional[bool] = False) -> ui.cellAAPWidget:
         napari_viewer=napari.current_viewer(), cfg=None, batch=batch
     )
 
+    # Connect callbacks with state management
     cellaap_widget.inference_button.clicked.connect(
         lambda: run_inference(cellaap_widget)
     )
@@ -66,18 +67,17 @@ def create_cellAAP_widget(batch: Optional[bool] = False) -> ui.cellAAPWidget:
     )
 
     cellaap_widget.image_selector.clicked.connect(
-        lambda: fileio.grab_file(cellaap_widget)
+        lambda: select_image_and_update_state(cellaap_widget)
     )
 
-    cellaap_widget.path_selector.clicked.connect(
-        lambda: fileio.grab_directory(cellaap_widget)
-    )
+    cellaap_widget.save_selector.clicked.connect(lambda: save_and_update_state(cellaap_widget))
 
-    cellaap_widget.save_selector.clicked.connect(lambda: fileio.save(cellaap_widget))
-
-    cellaap_widget.set_configs.clicked.connect(lambda: configure(cellaap_widget))
+    cellaap_widget.set_configs.clicked.connect(lambda: configure_and_update_state(cellaap_widget))
 
     cellaap_widget.results_display.clicked.connect(lambda: disp_inf_results(cellaap_widget))
+
+    # Initialize button states
+    update_button_states(cellaap_widget)
 
     return cellaap_widget
 
@@ -93,19 +93,80 @@ def create_batch_widget(batch: Optional[bool] = True) -> ui.cellAAPWidget:
         lambda: batch_inference(cellaap_widget)
     )
 
-    cellaap_widget.set_configs.clicked.connect(lambda: configure(cellaap_widget))
+    cellaap_widget.set_configs.clicked.connect(lambda: configure_and_update_state(cellaap_widget))
 
     cellaap_widget.add_button.clicked.connect(lambda: fileio.add(cellaap_widget))
 
     cellaap_widget.remove_button.clicked.connect(lambda: fileio.remove(cellaap_widget))
 
-    cellaap_widget.path_selector.clicked.connect(
-        lambda: fileio.grab_directory(cellaap_widget)
-    )
-
     cellaap_widget.results_display.clicked.connect(lambda: disp_inf_results(cellaap_widget))
 
+    # Initialize button states
+    update_button_states(cellaap_widget)
+
     return cellaap_widget
+
+
+def select_image_and_update_state(cellaap_widget: ui.cellAAPWidget):
+    """Select image and update button states accordingly"""
+    try:
+        fileio.grab_file(cellaap_widget)
+        # Enable display button after image selection
+        cellaap_widget.display_button.setEnabled(True)
+        update_button_states(cellaap_widget)
+    except Exception as e:
+        napari.utils.notifications.show_error(f"Error selecting image: {str(e)}")
+
+
+def configure_and_update_state(cellaap_widget: ui.cellAAPWidget):
+    """Configure model and update button states accordingly"""
+    try:
+        configure(cellaap_widget)
+        update_button_states(cellaap_widget)
+    except Exception as e:
+        napari.utils.notifications.show_error(f"Error configuring model: {str(e)}")
+
+
+def save_and_update_state(cellaap_widget: ui.cellAAPWidget):
+    """Save results and update button states accordingly"""
+    try:
+        # First, prompt user to select save directory
+        dir_grabber = fileio.grab_directory(cellaap_widget)
+        if dir_grabber:
+            # Then save the results
+            fileio.save(cellaap_widget)
+            # Enable results display after saving
+            cellaap_widget.results_display.setEnabled(True)
+            update_button_states(cellaap_widget)
+    except Exception as e:
+        napari.utils.notifications.show_error(f"Error saving results: {str(e)}")
+
+
+def update_button_states(cellaap_widget: ui.cellAAPWidget):
+    """Update button states based on current workflow progress"""
+    
+    # Check if image is selected
+    has_image = hasattr(cellaap_widget, 'image_path') and cellaap_widget.image_path is not None
+    
+    # Check if model is configured
+    is_configured = cellaap_widget.configured
+    
+    # Check if inference has been run
+    has_inference_results = len(cellaap_widget.inference_cache) > 0
+    
+    # Update button states based on workflow progress
+    if not cellaap_widget.batch:
+        # Single image mode
+        cellaap_widget.display_button.setEnabled(has_image)
+        cellaap_widget.inference_button.setEnabled(has_image and is_configured)
+        cellaap_widget.save_selector.setEnabled(has_inference_results)
+        cellaap_widget.results_display.setEnabled(has_inference_results)
+    else:
+        # Batch mode
+        has_files = len(cellaap_widget.full_spectrum_files) > 0
+        cellaap_widget.inference_button.setEnabled(has_files and is_configured)
+        cellaap_widget.save_selector.setEnabled(has_inference_results)
+        cellaap_widget.results_display.setEnabled(has_inference_results)
 
 
 def inference(
@@ -118,7 +179,7 @@ def inference(
         cellaap_widget: instance of ui.cellAAPWidget()
     """
 
-    if cellaap_widget.model_type == "yacs":
+    if cellaap_widget.model_type == "yacs": 
         img = au.bw_to_rgb(img)
         output = cellaap_widget.predictor(img.astype("float32"))
 
@@ -221,6 +282,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
         img = au.bw_to_rgb(im_array)
         semantic_seg, instance_seg, centroids, img, scores, classes= inference(cellaap_widget, img)
         semantic_movie.append(semantic_seg.astype("uint16"))
+        print(np.unique(semantic_seg.astype("uint16")))
         instance_movie.append(instance_seg.astype("uint16"))
         scores_movie.append(scores)
         classes_list.append(classes)
@@ -274,6 +336,9 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             "classes": classes_array
         }
     )
+    
+    # Update button states after inference is complete
+    update_button_states(cellaap_widget)
 
 
 def batch_inference(cellaap_widget: ui.cellAAPWidget):
