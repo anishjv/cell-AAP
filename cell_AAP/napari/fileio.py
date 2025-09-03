@@ -15,8 +15,15 @@ def image_select(
     cellaap_widget: ui.cellAAPWidget, pop: Optional[bool] = True
 ):
     """
-    Returns the path selected in the image selector box and the array corresponding the to path
-    -------------------------------------------------------------------------------------------
+    Returns the selected path and its image array
+    --------------------------------------------
+    INPUTS:
+        cellaap_widget: `ui.cellAAPWidget`
+        pop: Optional[bool]
+            If True, removes the file from `full_spectrum_files`
+    OUTPUTS:
+        name: str
+        layer_data: np.ndarray
     """
 
     file = cellaap_widget.full_spectrum_files[0]
@@ -39,10 +46,12 @@ def image_select(
 
 def display(cellaap_widget: ui.cellAAPWidget):
     """
-    Displays file in Napari gui if file has been selected, also returns the 'name' of the image file
-    ------------------------------------------------------------------------------------------------
+    Displays the selected file in the Napari GUI
+    --------------------------------------------
     INPUTS:
-        cellaap_widget: instance of ui.cellAAPWidget()
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
     """
     try:
         name, layer_data = image_select(
@@ -58,10 +67,12 @@ def display(cellaap_widget: ui.cellAAPWidget):
 
 def grab_file(cellaap_widget: ui.cellAAPWidget):
     """
-    Initiates a QtWidget.QFileDialog instance and grabs a file
-    -----------------------------------------------------------
+    Initiates a file dialog and grabs one or more files
+    ---------------------------------------------------
     INPUTS:
-        cellaap_widget: instance of ui.cellAAPWidget()
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
     """
     file_filter = "TIFF (*.tiff, *.tif);; JPEG (*.jpg);; PNG (*.png)"
     file_names, _ = QtWidgets.QFileDialog.getOpenFileNames(
@@ -80,8 +91,10 @@ def grab_file(cellaap_widget: ui.cellAAPWidget):
             napari.utils.notifications.show_info(
                 f"File: {file_names[0]} is queued for inference/analysis"
             )
-            cellaap_widget.range_slider.setRange(min=0, max=shape[0] - 1)
-            cellaap_widget.range_slider.setValue((0, shape[1]))
+            # Only set range slider for single-image mode
+            if not getattr(cellaap_widget, 'batch', False):
+                cellaap_widget.range_slider.setRange(min=0, max=shape[0] - 1)
+                cellaap_widget.range_slider.setValue((0, shape[1]))
         except AttributeError or IndexError:
             napari.utils.notifications.show_error("No file was selected")
     else:
@@ -90,10 +103,12 @@ def grab_file(cellaap_widget: ui.cellAAPWidget):
 
 def grab_directory(cellaap_widget):
     """
-    Initiates a QtWidget.QFileDialog instance and grabs a directory
-    -----------------------------------------------------------
+    Initiates a directory selection dialog
+    --------------------------------------
     INPUTS:
-        cellaap_widget: instance of ui.cellAAPWidget()
+        cellaap_widget: `ui.cellAAPWidget`
+    OUTPUTS:
+        dir_grabber: str
     """
 
     dir_grabber = QtWidgets.QFileDialog.getExistingDirectory(
@@ -112,7 +127,15 @@ def grab_directory(cellaap_widget):
 
 def save(cellaap_widget):
     """
-    Saves and analyzes an inference result
+    Saves inference results to disk
+    -------------------------------
+    INPUTS:
+        cellaap_widget: `ui.cellAAPWidget`
+    BEHAVIOR:
+        - In batch mode, saves all cached results
+        - In single-image mode, saves the selected cache entry
+    RETURNS:
+        None
     """
 
     try:
@@ -123,62 +146,77 @@ def save(cellaap_widget):
         )
         filepath = os.getcwd()
 
-    # Check if save combo box has items
-    if cellaap_widget.save_combo_box.count() == 0:
+    # Check cache availability
+    if len(cellaap_widget.inference_cache) == 0:
         napari.utils.notifications.show_error("No inference results to save")
         return
 
-    inference_result_name = cellaap_widget.save_combo_box.currentText()
-    
-    inference_result = list(
-        filter(
-            lambda x: x["name"] == f"{inference_result_name}",
-            cellaap_widget.inference_cache,
-        )
-    )[0]
-
+    # Determine which entries to save
+    if getattr(cellaap_widget, 'batch', False):
+        cache_entries = cellaap_widget.inference_cache
+    else:
+        # Use selected entry from combo box
+        if cellaap_widget.save_combo_box.count() == 0:
+            napari.utils.notifications.show_error("No inference results to save")
+            return
+        selected_name = cellaap_widget.save_combo_box.currentText()
+        cache_entries = [
+            entry for entry in cellaap_widget.inference_cache if entry["name"] == selected_name
+        ]
+        if len(cache_entries) == 0:
+            napari.utils.notifications.show_error("Selected inference result not found")
+            return
 
     model_name = cellaap_widget.model_selector.currentText()
-    try:
-        position = re.search(r"_s\d_", inference_result_name).group()
-        analysis_file_prefix = inference_result_name.split(position)[0] + position
-    except Exception:
-        analysis_file_prefix = inference_result_name.split(model_name)[0]
 
-    inference_folder_path = os.path.join(filepath, inference_result_name + "_inference")
-    os.mkdir(inference_folder_path)
+    for inference_result in cache_entries:
+        inference_result_name = inference_result["name"]
+        try:
+            position = re.search(r"_s\d_", inference_result_name).group()
+            analysis_file_prefix = inference_result_name.split(position)[0] + position
+        except Exception:
+            analysis_file_prefix = inference_result_name.split(model_name)[0]
 
-    # Always save the three essential movies
-    # Save scores movie
-    tiff.imwrite(
-        os.path.join(
-            inference_folder_path, analysis_file_prefix + "scores_movie.tif"
-        ),
-        inference_result["scores_movie"],
-    )
+        inference_folder_path = os.path.join(filepath, inference_result_name + "_inference")
+        os.makedirs(inference_folder_path, exist_ok=True)
 
-    # Save semantic movie
-    tiff.imwrite(
-        os.path.join(
-            inference_folder_path, analysis_file_prefix + "semantic_movie.tif"
-        ),
-        inference_result["semantic_movie"],
-        dtype="uint16",
-    )
+        # Save scores movie
+        tiff.imwrite(
+            os.path.join(
+                inference_folder_path, analysis_file_prefix + "scores_movie.tif"
+            ),
+            inference_result["scores_movie"],
+        )
 
-    # Save instance movie (tracking results)
-    tiff.imwrite(
-        os.path.join(
-            inference_folder_path, analysis_file_prefix + "instance_movie.tif"
-        ),
-        inference_result["instance_movie"],
-        dtype="uint16",
-    )
+        # Save semantic movie
+        tiff.imwrite(
+            os.path.join(
+                inference_folder_path, analysis_file_prefix + "semantic_movie.tif"
+            ),
+            inference_result["semantic_movie"],
+            dtype="uint16",
+        )
 
-    napari.utils.notifications.show_info(f"Results saved to: {inference_folder_path}")
+        # Save instance movie (tracking results)
+        tiff.imwrite(
+            os.path.join(
+                inference_folder_path, analysis_file_prefix + "instance_movie.tif"
+            ),
+            inference_result["instance_movie"],
+            dtype="uint16",
+        )
+
+        napari.utils.notifications.show_info(f"Results saved to: {inference_folder_path}")
 
 def add(cellaap_widget: ui.cellAAPWidget):
-    "Adds a movie to the batch worker"
+    """
+    Adds a movie to the batch worker
+    --------------------------------
+    INPUTS:
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
+    """
 
     grab_file(cellaap_widget)
     for file in cellaap_widget.full_spectrum_files:
@@ -186,7 +224,14 @@ def add(cellaap_widget: ui.cellAAPWidget):
 
 
 def remove(cellaap_widget: ui.cellAAPWidget):
-    "Removes a movie from the batch worker"
+    """
+    Removes a movie from the batch worker
+    -------------------------------------
+    INPUTS:
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
+    """
     current_row = cellaap_widget.full_spectrum_file_list.currentRow()
     if current_row >= 0:
         current_item = cellaap_widget.full_spectrum_file_list.takeItem(current_row)
@@ -195,7 +240,14 @@ def remove(cellaap_widget: ui.cellAAPWidget):
 
 
 def clear(cellaap_widget: ui.cellAAPWidget):
-    "Clears the batchworker of all movies"
+    """
+    Clears the batch worker of all movies
+    ------------------------------------
+    INPUTS:
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
+    """
 
     cellaap_widget.full_spectrum_file_list.clear()
     cellaap_widget.full_spectrum_files = []

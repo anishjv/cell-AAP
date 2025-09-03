@@ -83,17 +83,18 @@ def get_model(model_name:str):
         cellaap_widget: instance of ui.cellAAPWidget()I
     """
     url_registry = {
-        "HeLa": "doi:10.5281/zenodo.15587924",
-        "HeLa_focal": "doi:10.5281/zenodo.15587884",
-        "HT1080_focal": "doi:10.5281/zenodo.15632609",
-        "HT1080": "doi:10.5281/zenodo.15632636",
-        "RPE1_focal": "doi:10.5281/zenodo.15632647",
-        "RPE1": "doi:10.5281/zenodo.15632661",
-        "U2OS_focal": "doi:10.5281/zenodo.15632668",
-        "U2OS": "doi:10.5281/zenodo.15632681",
-        "general": "doi:10.5281/zenodo.15707118",
-        "HeLa_dead": "doi:10.5281/zenodo.16945394"
-    }
+            "HeLa": "doi:10.5281/zenodo.15587924",
+            "HeLa_focal": "doi:10.5281/zenodo.15587884",
+            "HT1080_focal": "doi:10.5281/zenodo.15632609",
+            "HT1080": "doi:10.5281/zenodo.15632636",
+            "RPE1_focal": "doi:10.5281/zenodo.15632647",
+            "RPE1": "doi:10.5281/zenodo.15632661",
+            "U2OS_focal": "doi:10.5281/zenodo.15632668",
+            "U2OS": "doi:10.5281/zenodo.15632681",
+            "general_focal": "doi:10.5281/zenodo.15707118",
+            "HeLa_dead": "doi:10.5281/zenodo.17026586",
+            "general_dead_focal": "doi:10.5281/zenodo.17026595"
+        }
 
     weights_registry = {
         "HeLa": (
@@ -128,13 +129,17 @@ def get_model(model_name:str):
             "model_final.pth",
             "md5:8fbe8dab57cd96e72537449eb490fa6f"
         ),
-        "general": (
+        "general_focal": (
             "model_0061499.pth",
             "md5:62e5f4be12227146f6a9841ada46526a"
         ),       
         "HeLa_dead": (
             "model_0080999.pth",
-            "md5:51de7b8ff94aca5deb774b9cd75421f4"
+            "md5:9d286376f1b07402023e82f824b2a677"
+        ),
+        "general_dead_focal": (
+            "model_0143499.pth",
+            "md5:37c7e70599c6be6721c55227739a96bc"
         )
 
     }
@@ -180,16 +185,21 @@ def get_model(model_name:str):
             "md5:2ab6cd0635b02ad24bcb03371839b807",
             "lazy"
         ),
-        "general": (
+        "general_focal": (
             "config.yaml",
             "md5:ad609c147ea2cd7d7fde0d734de2e166",
             "lazy"
         ),
         "HeLa_dead": (
             "config.yaml",
-            "md5:74b102fff4e3118d6b1ec563520c2fe0",
+            "md5:2bb2594730432a1cc30a6a5fd556df6b",
             "lazy"
-        )
+        ),
+        "general_dead_focal": (
+            "config.yaml",
+            "md5:3fb65fcc6c3f06e52b36ef53282266c6",
+            "lazy"
+        ),
 
     }
 

@@ -83,8 +83,9 @@ def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
     model_selector.addItem("HT1080_focal")
     model_selector.addItem("RPE1")
     model_selector.addItem("RPE1_focal")
-    model_selector.addItem("general")
+    model_selector.addItem("general_focal")
     model_selector.addItem("HeLa_dead")
+    model_selector.addItem("general_dead_focal")
     widgets = {"model_selector": ("Select Model", model_selector)}
 
     thresholder = QtWidgets.QDoubleSpinBox()

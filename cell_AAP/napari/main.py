@@ -51,7 +51,15 @@ def patched_torch_load(*args, **kwargs):
 
 
 def create_cellAAP_widget(batch: Optional[bool] = False) -> ui.cellAAPWidget:
-    "Creates instance of ui.cellAAPWidget and sets callbacks"
+    """
+    Creates instance of `ui.cellAAPWidget` and sets callbacks
+    ---------------------------------------------------------
+    INPUTS:
+        batch: Optional[bool]
+            If True, configures widget for batch mode; otherwise single-image mode
+    RETURNS:
+        ui.cellAAPWidget
+    """
 
     cellaap_widget = ui.cellAAPWidget(
         napari_viewer=napari.current_viewer(), cfg=None, batch=batch
@@ -83,7 +91,15 @@ def create_cellAAP_widget(batch: Optional[bool] = False) -> ui.cellAAPWidget:
 
 
 def create_batch_widget(batch: Optional[bool] = True) -> ui.cellAAPWidget:
-    "Creates instance of ui.cellAAPWidget and sets callbacks"
+    """
+    Creates instance of `ui.cellAAPWidget` in batch mode and sets callbacks
+    ----------------------------------------------------------------------
+    INPUTS:
+        batch: Optional[bool]
+            Batch mode flag (defaults True for clarity)
+    RETURNS:
+        ui.cellAAPWidget
+    """
 
     cellaap_widget = ui.cellAAPWidget(
         napari_viewer=napari.current_viewer(), cfg=None, batch=batch
@@ -108,7 +124,14 @@ def create_batch_widget(batch: Optional[bool] = True) -> ui.cellAAPWidget:
 
 
 def select_image_and_update_state(cellaap_widget: ui.cellAAPWidget):
-    """Select image and update button states accordingly"""
+    """
+    Selects image and updates button states accordingly
+    ---------------------------------------------------
+    INPUTS:
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
+    """
     try:
         fileio.grab_file(cellaap_widget)
         # Enable display button after image selection
@@ -119,7 +142,14 @@ def select_image_and_update_state(cellaap_widget: ui.cellAAPWidget):
 
 
 def configure_and_update_state(cellaap_widget: ui.cellAAPWidget):
-    """Configure model and update button states accordingly"""
+    """
+    Configures model and updates button states accordingly
+    ------------------------------------------------------
+    INPUTS:
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
+    """
     try:
         configure(cellaap_widget)
         update_button_states(cellaap_widget)
@@ -128,7 +158,14 @@ def configure_and_update_state(cellaap_widget: ui.cellAAPWidget):
 
 
 def save_and_update_state(cellaap_widget: ui.cellAAPWidget):
-    """Save results and update button states accordingly"""
+    """
+    Saves results and updates button states accordingly
+    ---------------------------------------------------
+    INPUTS:
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
+    """
     try:
         # First, prompt user to select save directory
         dir_grabber = fileio.grab_directory(cellaap_widget)
@@ -143,7 +180,14 @@ def save_and_update_state(cellaap_widget: ui.cellAAPWidget):
 
 
 def update_button_states(cellaap_widget: ui.cellAAPWidget):
-    """Update button states based on current workflow progress"""
+    """
+    Updates button states based on current workflow progress
+    --------------------------------------------------------
+    INPUTS:
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
+    """
     
     # Check if image is selected
     has_image = hasattr(cellaap_widget, 'image_path') and cellaap_widget.image_path is not None
@@ -173,10 +217,19 @@ def inference(
     cellaap_widget: ui.cellAAPWidget, img: np.ndarray, frame_num: Optional[int] = None
 ) -> tuple[np.ndarray, np.ndarray, list, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Runs the actual inference -> Detectron2 -> masks
-    ------------------------------------------------
+    Runs the actual inference (Detectron2) and produces masks
+    ---------------------------------------------------------
     INPUTS:
-        cellaap_widget: instance of ui.cellAAPWidget()
+        cellaap_widget: `ui.cellAAPWidget`
+        img: np.ndarray
+        frame_num: Optional[int]
+    OUTPUTS:
+        seg_fordisp: np.ndarray
+        seg_fortracking: np.ndarray
+        centroids: list
+        img: np.ndarray
+        seg_scores: np.ndarray
+        labels: np.ndarray
     """
 
     if cellaap_widget.model_type == "yacs": 
@@ -222,10 +275,12 @@ def inference(
 
 def run_inference(cellaap_widget: ui.cellAAPWidget):
     """
-    Runs inference on image returned by self.image_select(), saves inference result if save selector has been checked
-    ----------------------------------------------------------------------------------------------------------------
-    Inputs:
-        cellapp_widget: instance of ui.cellAAPWidget()
+    Runs inference on the selected image and caches results
+    -------------------------------------------------------
+    INPUTS:
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
     """
     prog_count = 0
     instance_movie = []
@@ -248,25 +303,21 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             "You must configure the model before running inference"
         )
         return
-
-    cellaap_widget.progress_bar.setMaximum(
-        cellaap_widget.range_slider.value()[1]
-        - cellaap_widget.range_slider.value()[0]
-        + 1
-    )
+    
+    # Configure frame progress for batch vs single-image mode
     if len(im_array.shape) == 3:
+        frame_total = im_array.shape[0] if cellaap_widget.batch else (
+            cellaap_widget.range_slider.value()[1] - cellaap_widget.range_slider.value()[0] + 1
+        )
+        cellaap_widget.progress_bar.setValue(0)
+        cellaap_widget.progress_bar.setMaximum(frame_total)
         movie = []
-        for frame in range(
-            cellaap_widget.range_slider.value()[1]
-            - cellaap_widget.range_slider.value()[0]
-            + 1
-        ):
-            prog_count += 1
-            frame += cellaap_widget.range_slider.value()[0]
-            cellaap_widget.progress_bar.setValue(prog_count)
-            img = im_array[frame]
+        for i in range(frame_total):
+            # In batch mode, process all frames; otherwise respect slider range
+            frame_index = i if cellaap_widget.batch else i + cellaap_widget.range_slider.value()[0]
+            img = im_array[frame_index]
             semantic_seg, instance_seg, centroids, img, scores_seg, classes= inference(
-                cellaap_widget, img, frame - cellaap_widget.range_slider.value()[0]
+                cellaap_widget, img, i
             )
             movie.append(img)
             semantic_movie.append(semantic_seg.astype("uint16"))
@@ -275,19 +326,21 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
             classes_list.append(classes)
             if len(centroids) != 0:
                 points += (centroids,)
+            prog_count += 1
+            cellaap_widget.progress_bar.setValue(prog_count)
 
     elif len(im_array.shape) == 2:
-        prog_count += 1
-        cellaap_widget.progress_bar.setValue(prog_count)
-        img = au.bw_to_rgb(im_array)
-        semantic_seg, instance_seg, centroids, img, scores, classes= inference(cellaap_widget, img)
+        cellaap_widget.progress_bar.setValue(0)
+        cellaap_widget.progress_bar.setMaximum(1)
+        semantic_seg, instance_seg, centroids, img, scores, classes= inference(cellaap_widget, im_array)
         semantic_movie.append(semantic_seg.astype("uint16"))
-        print(np.unique(semantic_seg.astype("uint16")))
         instance_movie.append(instance_seg.astype("uint16"))
         scores_movie.append(scores)
         classes_list.append(classes)
         if len(centroids) != 0:
             points += (centroids,)
+        prog_count = 1
+        cellaap_widget.progress_bar.setValue(prog_count)
 
     model_name = cellaap_widget.model_selector.currentText()
     cellaap_widget.progress_bar.reset()
@@ -299,16 +352,6 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
     classes_array = np.concatenate(classes_list, axis =0)
 
     cache_entry_name = f"{name}_{model_name}_{cellaap_widget.confluency_est.value()}_{round(cellaap_widget.thresholder.value(), ndigits = 2)}"
-    if cellaap_widget.batch == False:
-
-        try:
-            cellaap_widget.viewer.add_image(np.asarray(movie)[:, :, :, 0], name=name)
-        except UnboundLocalError:
-            try:
-                cellaap_widget.viewer.add_image(img[:, :, 0], name=name)
-            except:
-                pass
-
 
     already_cached = [
         cellaap_widget.save_combo_box.itemText(i)
@@ -326,16 +369,23 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
     cellaap_widget.save_combo_box.insertItem(0, cache_entry_name)
     cellaap_widget.save_combo_box.setCurrentIndex(0)
 
-    cellaap_widget.inference_cache.append(
-        {
-            "name": cache_entry_name,
-            "semantic_movie": semantic_movie,
-            "instance_movie": instance_movie,
-            "centroids": points_array,
-            "scores_movie": scores_movie,
-            "classes": classes_array
-        }
-    )
+    cache_entry = {
+        "name": cache_entry_name,
+        "semantic_movie": semantic_movie,
+        "instance_movie": instance_movie,
+        "centroids": points_array,
+        "scores_movie": scores_movie,
+        "classes": classes_array,
+    }
+    # Store the raw image/movie for later display in disp_inf_results
+    try:
+        cache_entry["movie"] = np.asarray(movie)
+    except UnboundLocalError:
+        cache_entry["movie"] = img
+    # Store a reasonable image layer name
+    cache_entry["image_layer_name"] = name
+
+    cellaap_widget.inference_cache.append(cache_entry)
     
     # Update button states after inference is complete
     update_button_states(cellaap_widget)
@@ -343,26 +393,35 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
 
 def batch_inference(cellaap_widget: ui.cellAAPWidget):
     """
-    Runs inference on group of movies through the batch worker
-    ----------------------------------------------------------
-    Inputs:
-        cellapp_widget: instance of ui.cellAAPWidget()
+    Runs inference on a group of movies in batch mode and caches results
+    --------------------------------------------------------------------
+    INPUTS:
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
     """
 
     num_movies = len(cellaap_widget.full_spectrum_files)
     movie_tally = 0
+    # Configure image-level progress bar if present
+    cellaap_widget.progress_bar_images.setMaximum(num_movies)
+    cellaap_widget.progress_bar_images.setValue(0)
+
     while movie_tally < num_movies:
         run_inference(cellaap_widget)
-        fileio.save(cellaap_widget)
         movie_tally += 1
+        cellaap_widget.progress_bar_images.setValue(movie_tally)
+
 
 
 def configure(cellaap_widget: ui.cellAAPWidget):
     """
-    Configures some tunable parameters for Detectron2
-    ------------------------------------------------
+    Configures tunable parameters and initializes the predictor
+    ----------------------------------------------------------
     INPUTS:
-        cellaap_widget: instance of ui.cellAAPWidget()
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
     """
 
     model, model_type, weights_name, config_name = get_model(cellaap_widget)
@@ -422,10 +481,15 @@ def configure(cellaap_widget: ui.cellAAPWidget):
 
 def get_model(cellaap_widget):
     """
-    Instaniates POOCH instance containing model files from the model_registry
-    --------------------------------------------------------------------------
+    Instantiates a `pooch` registry for model files and returns model info
+    ----------------------------------------------------------------------
     INPUTS:
-        cellaap_widget: instance of ui.cellAAPWidget()I
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        model: pooch.Pooch
+        model_type: str
+        weights_name: str
+        config_name: str
     """
 
     model_name = cellaap_widget.model_selector.currentText()
@@ -439,8 +503,9 @@ def get_model(cellaap_widget):
             "RPE1": "doi:10.5281/zenodo.15632661",
             "U2OS_focal": "doi:10.5281/zenodo.15632668",
             "U2OS": "doi:10.5281/zenodo.15632681",
-            "general": "doi:10.5281/zenodo.15707118",
-            "HeLa_dead": "doi:10.5281/zenodo.16945394"
+            "general_focal": "doi:10.5281/zenodo.15707118",
+            "HeLa_dead": "doi:10.5281/zenodo.17026586",
+            "general_dead_focal": "doi:10.5281/zenodo.17026595"
         }
 
     weights_registry = {
@@ -476,13 +541,17 @@ def get_model(cellaap_widget):
             "model_final.pth",
             "md5:8fbe8dab57cd96e72537449eb490fa6f"
         ),
-        "general": (
+        "general_focal": (
             "model_0061499.pth",
             "md5:62e5f4be12227146f6a9841ada46526a"
         ),       
         "HeLa_dead": (
             "model_0080999.pth",
-            "md5:51de7b8ff94aca5deb774b9cd75421f4"
+            "md5:9d286376f1b07402023e82f824b2a677"
+        ),
+        "general_dead_focal": (
+            "model_0143499.pth",
+            "md5:37c7e70599c6be6721c55227739a96bc"
         )
 
     }
@@ -528,16 +597,21 @@ def get_model(cellaap_widget):
             "md5:2ab6cd0635b02ad24bcb03371839b807",
             "lazy"
         ),
-        "general": (
+        "general_focal": (
             "config.yaml",
             "md5:ad609c147ea2cd7d7fde0d734de2e166",
             "lazy"
         ),
         "HeLa_dead": (
             "config.yaml",
-            "md5:74b102fff4e3118d6b1ec563520c2fe0",
+            "md5:2bb2594730432a1cc30a6a5fd556df6b",
             "lazy"
-        )
+        ),
+        "general_dead_focal": (
+            "config.yaml",
+            "md5:3fb65fcc6c3f06e52b36ef53282266c6",
+            "lazy"
+        ),
 
     }
 
@@ -565,13 +639,14 @@ def color_masks(
     erode = False
 ) -> np.ndarray:
     """
-    Takes an array of segmentation masks and colors them by some pre-defined metric. If metric is not given masks are colored randomely
-    -------------------------------------------------------------------------------------------------------------------------------------
+    Colors segmentation masks by a chosen method or mapping
+    -------------------------------------------------------
     INPUTS:
         segmentations: np.ndarray
         labels: np.ndarray
-        method: str
-        custom_dict: dict
+        method: Optional[str]
+        custom_dict: Optional[dict[int, int]]
+        erode: bool
     OUTPUTS:
         seg_labeled: np.ndarray
     """
@@ -613,8 +688,14 @@ def color_masks(
     return seg_labeled
 
 def disp_inf_results(cellaap_widget) -> None:
-
-    "Displays inference/analysis results when called"
+    """
+    Displays inference and analysis results for the selected cache entry
+    --------------------------------------------------------------------
+    INPUTS:
+        cellaap_widget: `ui.cellAAPWidget`
+    RETURNS:
+        None
+    """
 
     result_name = cellaap_widget.save_combo_box.currentText()
     result = list(
@@ -623,6 +704,20 @@ def disp_inf_results(cellaap_widget) -> None:
             cellaap_widget.inference_cache,
         )
     )[0]
+
+    # Add underlying raw image/movie first if available
+    try:
+        movie = result['movie']
+        image_layer_name = result.get('image_layer_name', result_name)
+        if isinstance(movie, np.ndarray) and movie.ndim == 4:
+            # shape (frames, H, W, C) -> display first channel as image stack
+            cellaap_widget.viewer.add_image(movie[:, :, :, 0], name=image_layer_name)
+        else:
+            # 2D or 3D image
+            cellaap_widget.viewer.add_image(movie if movie.ndim != 3 else movie[:, :, 0], name=image_layer_name)
+    except Exception:
+        # If anything goes wrong, continue with labels/points
+        pass
 
     cellaap_widget.viewer.add_labels(
         result['semantic_movie'],

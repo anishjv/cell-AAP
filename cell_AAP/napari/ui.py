@@ -7,7 +7,14 @@ from cell_AAP.napari import sub_widgets  # type: ignore
 
 
 class cellAAPWidget(QtWidgets.QScrollArea):
-    "cellAAPWidget GUI Class"
+    """
+    cellAAPWidget GUI Class
+    -----------------------
+    INPUTS:
+        napari_viewer: Viewer
+        cfg: Any
+        batch: Optional[bool]
+    """
 
     def __getitem__(self, key: str):
         return self._widgets[key]
@@ -15,10 +22,15 @@ class cellAAPWidget(QtWidgets.QScrollArea):
     def __init__(
         self, napari_viewer: Viewer, cfg, batch: Optional[bool] = False
     ) -> None:
-        """Instantiates the primary widget in napari.
-
-        Args:
-            napari_viewer: A napari viewer instance
+        """
+        Instantiates the primary widget in napari
+        -----------------------------------------
+        INPUTS:
+            napari_viewer: Viewer
+            cfg: Any
+            batch: Optional[bool]
+        RETURNS:
+            None
         """
         super().__init__()
 
@@ -49,7 +61,12 @@ class cellAAPWidget(QtWidgets.QScrollArea):
             self.__setattr__(name, widget)
 
     def _add_file_selection_widgets(self):
-        """Adds file selection widgets in temporal order (first step)"""
+        """
+        Adds file selection widgets in temporal order (first step)
+        ---------------------------------------------------------
+        RETURNS:
+            None
+        """
         
         # File selection group
         file_group = QtWidgets.QGroupBox("1. Select Image")
@@ -106,25 +123,38 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         self._main_layout.addWidget(file_group)
 
     def _add_range_selection_widgets(self):
-        """Adds range selection widgets (second step)"""
+        """
+        Adds range selection widgets (second step)
+        -----------------------------------------
+        RETURNS:
+            None
+        """
         
-        # Range selection group
-        range_group = QtWidgets.QGroupBox("2. Set Frame Range")
-        range_layout = QtWidgets.QVBoxLayout()
-        
+        # Always create inference widgets (button + progress bar), but
+        # only show the frame range slider for single-image mode.
         range_widgets = sub_widgets.create_inf_widgets()
         self._widgets.update(range_widgets)
-        
-        # Style range slider
-        range_slider = range_widgets["range_slider"]
-        range_slider.setToolTip("Select the frames of the movie over which to run inference")
-        range_layout.addWidget(range_slider)
-        
-        range_group.setLayout(range_layout)
-        self._main_layout.addWidget(range_group)
+
+        if not self.batch:
+            # Range selection group (single image mode only)
+            range_group = QtWidgets.QGroupBox("2. Set Frame Range")
+            range_layout = QtWidgets.QVBoxLayout()
+
+            # Style range slider
+            range_slider = range_widgets["range_slider"]
+            range_slider.setToolTip("Select the frames of the movie over which to run inference")
+            range_layout.addWidget(range_slider)
+
+            range_group.setLayout(range_layout)
+            self._main_layout.addWidget(range_group)
 
     def _add_config_widgets(self):
-        """Adds configuration widgets (third step)"""
+        """
+        Adds configuration widgets (third step)
+        --------------------------------------
+        RETURNS:
+            None
+        """
         
         # Configuration group
         config_group = QtWidgets.QGroupBox("3. Configure Model")
@@ -152,7 +182,12 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         self._main_layout.addWidget(config_group)
 
     def _add_inference_widgets(self):
-        """Adds inference widgets (fourth step)"""
+        """
+        Adds inference widgets (fourth step)
+        -----------------------------------
+        RETURNS:
+            None
+        """
         
         # Inference group
         inference_group = QtWidgets.QGroupBox("4. Run Inference")
@@ -169,15 +204,28 @@ class cellAAPWidget(QtWidgets.QScrollArea):
         )
         inference_layout.addWidget(inference_button)
         
-        # Progress bar
+        # Progress bar(s)
         progress_bar = self._widgets["progress_bar"]
         inference_layout.addWidget(progress_bar)
+
+        # In batch mode, add a second progress bar to indicate image progress
+        if self.batch:
+            progress_bar_images = QtWidgets.QProgressBar()
+            progress_bar_images.setTextVisible(True)
+            progress_bar_images.setFormat("Image %v/%m")
+            self._widgets["progress_bar_images"] = progress_bar_images
+            inference_layout.addWidget(progress_bar_images)
         
         inference_group.setLayout(inference_layout)
         self._main_layout.addWidget(inference_group)
 
     def _add_results_widgets(self):
-        """Adds results widgets (fifth step)"""
+        """
+        Adds results widgets (fifth step)
+        ---------------------------------
+        RETURNS:
+            None
+        """
         
         # Results group
         results_group = QtWidgets.QGroupBox("5. Save Results")
