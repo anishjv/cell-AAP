@@ -333,6 +333,7 @@ def inference(
     else:
         if img.shape == (2048, 2048):
             img = au.square_reshape(img, (1024, 1024))
+            img = au.bw_to_rgb(img)
         img_perm = np.moveaxis(img, -1, 0)
 
         with torch.inference_mode():
@@ -415,9 +416,8 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
             - interval[0]
             + 1
         ):
-            prog_count += 1
             frame += interval[0]
-            img = au.bw_to_rgb(im_array[frame])
+            img = im_array[frame]
             semantic_seg, instance_seg, centroids, img, scores_mov, classes= inference(
                 container, img, frame - interval[0]
             )
@@ -428,17 +428,17 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
             classes_list.append(classes)
             if len(centroids) != 0:
                 points += (centroids,)
+            prog_count += 1
 
     elif len(im_array.shape) == 2:
-        prog_count += 1
-        img = au.bw_to_rgb(im_array)
-        semantic_seg, instance_seg, centroids, img, scores_mov, classes= inference(container, img)
+        semantic_seg, instance_seg, centroids, img, scores_mov, classes= inference(container, im_array)
         semantic_movie.append(semantic_seg.astype("uint16"))
         instance_movie.append(instance_seg.astype("uint16"))
         scores_movie.append(scores_mov.astype("uint16"))
         classes_list.append(classes)
         if len(centroids) != 0:
             points += (centroids,)
+        prog_count += 1
 
     model_name = container['model_name']
 

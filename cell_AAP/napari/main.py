@@ -362,7 +362,7 @@ def run_inference(cellaap_widget: ui.cellAAPWidget):
         only_cache_entry = [
             entry
             for _, entry in enumerate(already_cached)
-            if entry == cache_entry_name
+            if entry in cache_entry_name
         ]
         cache_entry_name += f"_{len(only_cache_entry)}"
 
@@ -504,7 +504,7 @@ def get_model(cellaap_widget):
             "U2OS_focal": "doi:10.5281/zenodo.15632668",
             "U2OS": "doi:10.5281/zenodo.15632681",
             "general_focal": "doi:10.5281/zenodo.15707118",
-            "HeLa_dead": "doi:10.5281/zenodo.17026586",
+            "HeLa_dead": "doi:10.5281/zenodo.17123228",
             "general_dead_focal": "doi:10.5281/zenodo.17026595"
         }
 
@@ -546,8 +546,8 @@ def get_model(cellaap_widget):
             "md5:62e5f4be12227146f6a9841ada46526a"
         ),       
         "HeLa_dead": (
-            "model_0080999.pth",
-            "md5:9d286376f1b07402023e82f824b2a677"
+            "model_0121499.pth",
+            "md5:2ddfa097d5b357094c5191e03ef73cce"
         ),
         "general_dead_focal": (
             "model_0143499.pth",
@@ -604,7 +604,7 @@ def get_model(cellaap_widget):
         ),
         "HeLa_dead": (
             "config.yaml",
-            "md5:2bb2594730432a1cc30a6a5fd556df6b",
+            "md5:7117f5b9473658e438b2e56ff91baac8",
             "lazy"
         ),
         "general_dead_focal": (
