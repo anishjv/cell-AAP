@@ -93,7 +93,7 @@ def get_model(model_name:str):
             "U2OS": "doi:10.5281/zenodo.15632681",
             "general_focal": "doi:10.5281/zenodo.15707118",
             "HeLa_dead": "doi:10.5281/zenodo.17026586",
-            "general_dead_focal": "doi:10.5281/zenodo.17026595"
+            "general_dead_focal": "doi:10.5281/zenodo.17178783"
         }
 
     weights_registry = {
@@ -138,8 +138,8 @@ def get_model(model_name:str):
             "md5:9d286376f1b07402023e82f824b2a677"
         ),
         "general_dead_focal": (
-            "model_0143499.pth",
-            "md5:37c7e70599c6be6721c55227739a96bc"
+            "model_0121499.pth",
+            "md5:6e33ab492df6ca1f6b3ae468ea137728"
         )
 
     }
@@ -197,7 +197,7 @@ def get_model(model_name:str):
         ),
         "general_dead_focal": (
             "config.yaml",
-            "md5:3fb65fcc6c3f06e52b36ef53282266c6",
+            "md5:eb5281bd93b37e8505846e7b75dba596",
             "lazy"
         ),
 

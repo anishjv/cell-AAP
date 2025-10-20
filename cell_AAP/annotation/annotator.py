@@ -146,6 +146,8 @@ class Annotator:
                 dna_image_stack = _process_tiff_image(dna_image_list[0], return_2d=False)
                 phase_image_stack = _process_tiff_image(phase_image_list[0], return_2d=False)
 
+        print(dna_image_stack.shape)
+
         return cls(
             dna_image_list,
             dna_image_stack,
@@ -262,12 +264,15 @@ class Annotator:
                 if region.any() != 0:
 
                     intensity_img = self.cleaned_scalar_roi[i][j]
+                    region_labeled = label(np.asarray(region, dtype=bool))
+                    intensity_array = np.asarray(intensity_img, dtype=float)
+
                     props = regionprops_table(
-                            label(region),
-                            intensity_image=intensity_img,
-                            properties=self.configs.propslist,
-                            extra_properties=extra_props
-                        )
+                        region_labeled,
+                        intensity_image=intensity_array,
+                        properties=self.configs.propslist,
+                        extra_properties=extra_props,
+                    )
 
                     df = np.asarray(list(props.values())).T[0]
                     tracker = [i, j]
