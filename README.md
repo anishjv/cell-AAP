@@ -51,10 +51,12 @@ pip install cell-AAP
 ```bash
     
 #Mac
-CC=clang CXX=clang++ ARCHFLAGS="-arch arm64" python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
+git clone https://github.com/facebookresearch/detectron2.git
+CC=clang CXX=clang++ ARCHFLAGS="-arch arm64" python -m pip install -e detectron2
 
 #Linux/Windows
- python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
+git clone https://github.com/facebookresearch/detectron2.git
+python -m pip install -e detectron2
 ```
 
 ## Napari Plugin Usage
