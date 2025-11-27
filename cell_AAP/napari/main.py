@@ -19,6 +19,8 @@ from detectron2.config import get_cfg
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import LazyConfig, instantiate
 from typing import Optional
+import detectron2.data.transforms as T
+import torch.nn.functional as F
 
 setup_logger()
 
@@ -214,7 +216,10 @@ def update_button_states(cellaap_widget: ui.cellAAPWidget):
 
 
 def inference(
-    cellaap_widget: ui.cellAAPWidget, img: np.ndarray, frame_num: Optional[int] = None
+    cellaap_widget: ui.cellAAPWidget, 
+    img: np.ndarray, 
+    frame_num: Optional[int] = None
+    # REMOVED: keep_resized_output argument
 ) -> tuple[np.ndarray, np.ndarray, list, np.ndarray, np.ndarray, np.ndarray]:
     """
     Runs the actual inference (Detectron2) and produces masks
@@ -232,45 +237,93 @@ def inference(
         labels: np.ndarray
     """
 
-    if cellaap_widget.model_type == "yacs": 
-        img = au.bw_to_rgb(img)
-        output = cellaap_widget.predictor(img.astype("float32"))
+    # --- NEW: Read Parameter from GUI ---
+    # Because ui.py automatically sets attributes from the widget dict keys,
+    # we can access the checkbox directly via the name we gave it in sub_widgets.py
+    keep_resized_output = cellaap_widget.keep_resized_checkbox.isChecked()
+    # ------------------------------------
 
+    # 1. Capture Original Dimensions and Prepare Image
+    orig_h, orig_w = img.shape[:2]
+    img_original = img.copy() # Keep a reference to the original
+    
+    # Ensure 3-channel RGB for the transform logic (handle grayscale inputs)
+    if img.ndim == 2:
+        img_input = np.stack([img, img, img], axis=-1)
     else:
-        if img.shape == (2048, 2048):
-            img = au.square_reshape(img, (1024, 1024))
-            img = au.bw_to_rgb(img)
-        img_perm = np.moveaxis(img, -1, 0)
+        img_input = img
 
+    # 2. Resize Image to Model Requirements (1024x1024)
+    # We use Detectron2's transform to ensure consistency with training
+    aug = T.Resize((1024, 1024))
+    transform = aug.get_transform(img_input)
+    img_resized = transform.apply_image(img_input)
+
+    if cellaap_widget.model_type == "yacs": 
+        output = cellaap_widget.predictor(img_resized.astype("float32"))
+    else:
+        # LazyConfig/ViT expect (C, H, W) tensors
+        img_perm = np.moveaxis(img_resized, -1, 0)
         with torch.inference_mode():
             output = cellaap_widget.predictor(
                 [{"image": torch.from_numpy(img_perm).type(torch.float32)}]
             )[0]
 
-    segmentations = output["instances"].pred_masks.to("cpu")
-    labels = output["instances"].pred_classes.to("cpu").numpy()
-    scores = output["instances"].scores.to("cpu").numpy()
-    scores = (scores*100).astype('uint16')
+    # 4. Project Results Back to Original Size (if requested via Checkbox)
+    instances = output["instances"].to("cpu")
     
+    # Logic: If keep_resized is FALSE, and the image isn't 1024x1024, we project back
+    if not keep_resized_output and (orig_h != 1024 or orig_w != 1024):
+        
+        # We use nearest interpolation to maintain binary nature of masks without blurring edges
+        # Shape: (N, H, W) -> (N, 1, H, W) for interpolation -> (N, H, W)
+        if instances.has("pred_masks") and len(instances.pred_masks) > 0:
+            masks = instances.pred_masks.unsqueeze(1).float()
+            masks = F.interpolate(masks, size=(orig_h, orig_w), mode="nearest")
+            instances.pred_masks = masks.squeeze(1).bool()
+
+        if instances.has("pred_boxes"):
+            instances.pred_boxes.tensor = instances.pred_boxes.tensor.clone()
+            scale_x = orig_w / 1024.0
+            scale_y = orig_h / 1024.0
+            instances.pred_boxes.scale(scale_x, scale_y)
+            
+        #Update Metadata
+        instances._image_size = (orig_h, orig_w)
+        
+        # Ensure we return the original image so overlays match in Napari
+        img_to_return = img_original
+    else:
+        # If keeping resized output (Checked), return the resized image
+        img_to_return = img_resized
+
+    # 5. Extract Results (Standard Flow)
+    segmentations = instances.pred_masks 
+    labels = instances.pred_classes.numpy()
+    scores = instances.scores.numpy()
+    scores = (scores*100).astype('uint16')
+    classes = instances.pred_classes.numpy()
+
     custom_dict  = {key: key+99 for key in np.unique(labels)}
     seg_fordisp = color_masks(
         segmentations, labels, method="custom", custom_dict=custom_dict
     )
 
+    scores_mov = color_masks(segmentations, scores, method="straight")
     seg_fortracking = color_masks(segmentations, labels, method="random")
-
-    seg_scores = color_masks(segmentations, scores, method = "straight")
 
     centroids = []
     for i, _ in enumerate(labels):
-        labeled_mask = skimage.measure.label(segmentations[i])
+        # Ensure mask is numpy
+        mask_np = segmentations[i].numpy() if hasattr(segmentations[i], 'numpy') else segmentations[i]
+        labeled_mask = skimage.measure.label(mask_np)
         centroid = skimage.measure.centroid(labeled_mask)
         if frame_num != None:
             centroid = np.array([frame_num, centroid[0], centroid[1]])
 
         centroids.append(centroid)
 
-    return seg_fordisp, seg_fortracking, centroids, img, seg_scores, labels
+    return seg_fordisp, seg_fortracking, centroids, img_to_return, scores_mov, classes
 
 
 def run_inference(cellaap_widget: ui.cellAAPWidget):

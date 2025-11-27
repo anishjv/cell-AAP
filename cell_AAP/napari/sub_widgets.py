@@ -104,6 +104,17 @@ def create_config_widgets() -> dict[str, tuple[str, QtWidgets.QWidget]]:
 
     widgets["confluency_est"] = ("Cell Quantity", confluency_est)
 
+    keep_resized_checkbox = QtWidgets.QCheckBox("Keep 1024x1024")
+    keep_resized_checkbox.setToolTip(
+        "If checked, the output will remain 1024x1024 (Model Native).\n"
+        "If unchecked, the output is projected back to the original image size."
+    )
+    keep_resized_checkbox.setChecked(False) # Default to False (Project back)
+    
+    # We add it to the widgets dict. 
+    # The tuple format is (Label Text, Widget Object).
+    widgets["keep_resized_checkbox"] = ("Output Size", keep_resized_checkbox)
+
     set_configs = QtWidgets.QPushButton("Push Configurations")
     set_configs.setToolTip("Set Configurations")
 
