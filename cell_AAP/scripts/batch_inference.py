@@ -4,19 +4,33 @@ import inference as inf
 from skimage.io import imread
 import numpy as np
 
-model_name = 'HeLa' # can be on of ['HeLa', 'U2OS']
+import sys, tifffile
+from pathlib import Path
+import inference as inf
+from skimage.io import imread
+import numpy as np
+
+model_name = 'HeLa_focal'
 confluency_est = 1800 # can be in the interval (0, 2000]
 conf_threshold = .25 # can be in the interval (0, 1)
 
 # folder definition
-root_folder = Path('/scratch/ajitj_root/ajitj99/anishjv/HeLa_for_inf/for_inference')
-save_dir = Path('/scratch/ajitj_root/ajitj99/anishjv/HeLa_for_inf/complete')
-filter_str  = '*.tif'
+root_folder = Path('/nfs/turbo/umms-ajitj/anishjv/cyclinb_analysis/20251028-cycb-gsk')
+save_dir = Path('/nfs/turbo/umms-ajitj/anishjv/cyclinb_analysis/20251028-cycb-gsk')
+filter_str  = '*_phs.tif'
+
+blanks = ['G', 'H']
 
 file_list = []
 for phs_file_name in root_folder.glob(filter_str):
-    file_list.append(phs_file_name)
+    phs_file_name = str(phs_file_name)
+    if any(stub in phs_file_name for stub in blanks):
+        pass
+    else:
+        file_list.append(phs_file_name)
+        
 num_files = len(file_list)
+print(f'Found {num_files} files')
 
 # Following code is modified from Ajit P. Joglekar
 
