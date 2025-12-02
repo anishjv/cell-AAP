@@ -18,6 +18,12 @@ from cell_AAP.napari.main import color_masks  # type:ignore
 import detectron2.data.transforms as T
 import torch.nn.functional as F
 
+_original_torch_load = torch.load
+def patched_torch_load(*args, **kwargs):
+    if 'weights_only' not in kwargs:
+        kwargs['weights_only'] = False
+    return _original_torch_load(*args, **kwargs)
+
 
 def color_masks(
     segmentations: np.ndarray,
@@ -206,7 +212,9 @@ def configure(
         predictor = instantiate(cfg.model)
         predictor.to(cfg.train.device)
         predictor = create_ddp_model(predictor)
+        torch.load = patched_torch_load
         DetectionCheckpointer(predictor).load(cfg.train.init_checkpoint)
+        torch.load = _original_torch_load
         predictor.eval()
 
     if save_dir == None:
