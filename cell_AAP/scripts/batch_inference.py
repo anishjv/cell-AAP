@@ -1,11 +1,13 @@
-import sys, tifffile
+import sys
 from pathlib import Path
-import inference as inf
-from skimage.io import imread
-import numpy as np
 
-import sys, tifffile
-from pathlib import Path
+# Add parent directory to Python path so cell_AAP can be imported
+# This allows inference.py to import cell_AAP.core.inference_core
+parent_dir = Path(__file__).parent.parent.parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
+
+import tifffile
 import inference as inf
 from skimage.io import imread
 import numpy as np

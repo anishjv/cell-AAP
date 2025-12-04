@@ -371,12 +371,13 @@ def run_inference_on_image(
     # 1. Capture Original Dimensions and Prepare Image
     orig_h, orig_w = img.shape[:2]
     img_original = img.copy()  # Keep a reference to the original
+    img_float = img.astype("float32")
 
     # Ensure 3-channel RGB for the transform logic (handle grayscale inputs)
-    if img.ndim == 2:
-        img_input = np.stack([img, img, img], axis=-1)
+    if img_float.ndim == 2:
+        img_input = np.stack([img_float, img_float, img_float], axis=-1)
     else:
-        img_input = img
+        img_input = img_float
 
     # 2. Resize Image to Model Requirements (1024x1024)
     # We use Detectron2's transform to ensure consistency with training
