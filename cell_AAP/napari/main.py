@@ -1,26 +1,17 @@
 from __future__ import annotations
 import logging
+from typing import Optional
 import napari
 import napari.utils.notifications
 import cell_AAP.napari.ui as ui  # type:ignore
 import cell_AAP.annotation.annotation_utils as au  # type:ignore
 import cell_AAP.napari.fileio as fileio  # type: ignore
+import cell_AAP.core.inference_core as inference_core  # type: ignore
 
 import numpy as np
 import torch
-import skimage.measure
-from skimage.morphology import binary_erosion, disk
-import pooch
 
 from detectron2.utils.logger import setup_logger
-from detectron2.engine import DefaultPredictor
-from detectron2.engine.defaults import create_ddp_model
-from detectron2.config import get_cfg
-from detectron2.checkpoint import DetectionCheckpointer
-from detectron2.config import LazyConfig, instantiate
-from typing import Optional
-import detectron2.data.transforms as T
-import torch.nn.functional as F
 
 setup_logger()
 
@@ -45,11 +36,8 @@ if not logger.handlers:
     logger.setLevel(logging.DEBUG)
 
 
-_original_torch_load = torch.load
-def patched_torch_load(*args, **kwargs):
-    if 'weights_only' not in kwargs:
-        kwargs['weights_only'] = False
-    return _original_torch_load(*args, **kwargs)
+# Use shared patched_torch_load from core module
+from cell_AAP.core.inference_core import _original_torch_load, patched_torch_load
 
 
 def create_cellAAP_widget(batch: Optional[bool] = False) -> ui.cellAAPWidget:
@@ -219,7 +207,6 @@ def inference(
     cellaap_widget: ui.cellAAPWidget, 
     img: np.ndarray, 
     frame_num: Optional[int] = None
-    # REMOVED: keep_resized_output argument
 ) -> tuple[np.ndarray, np.ndarray, list, np.ndarray, np.ndarray, np.ndarray]:
     """
     Runs the actual inference (Detectron2) and produces masks
@@ -236,94 +223,18 @@ def inference(
         seg_scores: np.ndarray
         labels: np.ndarray
     """
-
-    # --- NEW: Read Parameter from GUI ---
+    # Read Parameter from GUI
     # Because ui.py automatically sets attributes from the widget dict keys,
     # we can access the checkbox directly via the name we gave it in sub_widgets.py
     keep_resized_output = cellaap_widget.keep_resized_checkbox.isChecked()
-    # ------------------------------------
 
-    # 1. Capture Original Dimensions and Prepare Image
-    orig_h, orig_w = img.shape[:2]
-    img_original = img.copy() # Keep a reference to the original
-    
-    # Ensure 3-channel RGB for the transform logic (handle grayscale inputs)
-    if img.ndim == 2:
-        img_input = np.stack([img, img, img], axis=-1)
-    else:
-        img_input = img
-
-    # 2. Resize Image to Model Requirements (1024x1024)
-    # We use Detectron2's transform to ensure consistency with training
-    aug = T.Resize((1024, 1024))
-    transform = aug.get_transform(img_input)
-    img_resized = transform.apply_image(img_input)
-
-    if cellaap_widget.model_type == "yacs": 
-        output = cellaap_widget.predictor(img_resized.astype("float32"))
-    else:
-        # LazyConfig/ViT expect (C, H, W) tensors
-        img_perm = np.moveaxis(img_resized, -1, 0)
-        with torch.inference_mode():
-            output = cellaap_widget.predictor(
-                [{"image": torch.from_numpy(img_perm).type(torch.float32)}]
-            )[0]
-
-    # 4. Project Results Back to Original Size (if requested via Checkbox)
-    instances = output["instances"].to("cpu")
-    
-    # Logic: If keep_resized is FALSE, and the image isn't 1024x1024, we project back
-    if not keep_resized_output and (orig_h != 1024 or orig_w != 1024):
-        
-        # We use nearest interpolation to maintain binary nature of masks without blurring edges
-        # Shape: (N, H, W) -> (N, 1, H, W) for interpolation -> (N, H, W)
-        if instances.has("pred_masks") and len(instances.pred_masks) > 0:
-            masks = instances.pred_masks.unsqueeze(1).float()
-            masks = F.interpolate(masks, size=(orig_h, orig_w), mode="nearest")
-            instances.pred_masks = masks.squeeze(1).bool()
-
-        if instances.has("pred_boxes"):
-            instances.pred_boxes.tensor = instances.pred_boxes.tensor.clone()
-            scale_x = orig_w / 1024.0
-            scale_y = orig_h / 1024.0
-            instances.pred_boxes.scale(scale_x, scale_y)
-            
-        #Update Metadata
-        instances._image_size = (orig_h, orig_w)
-        
-        # Ensure we return the original image so overlays match in Napari
-        img_to_return = img_original
-    else:
-        # If keeping resized output (Checked), return the resized image
-        img_to_return = img_resized
-
-    # 5. Extract Results (Standard Flow)
-    segmentations = instances.pred_masks 
-    labels = instances.pred_classes.numpy()
-    scores = instances.scores.numpy()
-    scores = (scores*100).astype('uint16')
-    classes = instances.pred_classes.numpy()
-
-    custom_dict  = {key: key+99 for key in np.unique(labels)}
-    seg_fordisp = color_masks(
-        segmentations, labels, method="custom", custom_dict=custom_dict
+    return inference_core.run_inference_on_image(
+        cellaap_widget.predictor,
+        cellaap_widget.model_type,
+        img,
+        frame_num,
+        keep_resized_output,
     )
-
-    scores_mov = color_masks(segmentations, scores, method="straight")
-    seg_fortracking = color_masks(segmentations, labels, method="random")
-
-    centroids = []
-    for i, _ in enumerate(labels):
-        # Ensure mask is numpy
-        mask_np = segmentations[i].numpy() if hasattr(segmentations[i], 'numpy') else segmentations[i]
-        labeled_mask = skimage.measure.label(mask_np)
-        centroid = skimage.measure.centroid(labeled_mask)
-        if frame_num != None:
-            centroid = np.array([frame_num, centroid[0], centroid[1]])
-
-        centroids.append(centroid)
-
-    return seg_fordisp, seg_fortracking, centroids, img_to_return, scores_mov, classes
 
 
 def run_inference(cellaap_widget: ui.cellAAPWidget):
@@ -476,60 +387,20 @@ def configure(cellaap_widget: ui.cellAAPWidget):
     RETURNS:
         None
     """
+    model_name = cellaap_widget.model_selector.currentText()
+    confluency_est = cellaap_widget.confluency_est.value() if cellaap_widget.confluency_est.value() else None
+    conf_threshold = cellaap_widget.thresholder.value() if cellaap_widget.thresholder.value() else None
 
-    model, model_type, weights_name, config_name = get_model(cellaap_widget)
-    if model_type == "yacs":
-        cellaap_widget.model_type = "yacs"
-        cellaap_widget.cfg = get_cfg()
-        cellaap_widget.cfg.merge_from_file(model.fetch(f"{config_name}"))
-        cellaap_widget.cfg.MODEL.WEIGHTS = model.fetch(f"{weights_name}")
+    predictor, model_type, cfg = inference_core.configure_predictor(
+        model_name, confluency_est, conf_threshold
+    )
 
-        if torch.cuda.is_available():
-            cellaap_widget.cfg.MODEL.DEVICE = "cuda"
-        else:
-            cellaap_widget.cfg.MODEL.DEVICE = "cpu"
-
-        if cellaap_widget.confluency_est.value():
-            cellaap_widget.cfg.TEST.DETECTIONS_PER_IMAGE = (
-                cellaap_widget.confluency_est.value()
-            )
-        if cellaap_widget.thresholder.value():
-            cellaap_widget.cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = (
-                cellaap_widget.thresholder.value()
-            )
-        predictor = DefaultPredictor(cellaap_widget.cfg)
-
-    else:
-        cellaap_widget.model_type = "lazy"
-        cellaap_widget.cfg = LazyConfig.load(model.fetch(f"{config_name}"))
-        cellaap_widget.cfg.train.init_checkpoint = model.fetch(f"{weights_name}")
-
-        if torch.cuda.is_available():
-            cellaap_widget.cfg.train.device = "cuda"
-        else:
-            cellaap_widget.cfg.train.device = "cpu"
-
-        if cellaap_widget.confluency_est.value():
-            cellaap_widget.cfg.model.proposal_generator.post_nms_topk[1] = (
-                cellaap_widget.confluency_est.value()
-            )
-
-        if cellaap_widget.thresholder.value():
-            cellaap_widget.cfg.model.roi_heads.box_predictor.test_score_thresh = (
-                cellaap_widget.thresholder.value()
-            )
-
-        predictor = instantiate(cellaap_widget.cfg.model)
-        predictor.to(cellaap_widget.cfg.train.device)
-        predictor = create_ddp_model(predictor)
-        torch.load = patched_torch_load
-        DetectionCheckpointer(predictor).load(cellaap_widget.cfg.train.init_checkpoint)
-        torch.load = _original_torch_load
-        predictor.eval()
+    cellaap_widget.model_type = model_type
+    cellaap_widget.cfg = cfg
+    cellaap_widget.predictor = predictor
+    cellaap_widget.configured = True
 
     napari.utils.notifications.show_info(f"Configurations successfully saved")
-    cellaap_widget.configured = True
-    cellaap_widget.predictor = predictor
 
 
 def get_model(cellaap_widget):
@@ -544,201 +415,9 @@ def get_model(cellaap_widget):
         weights_name: str
         config_name: str
     """
-
     model_name = cellaap_widget.model_selector.currentText()
+    return inference_core.get_model(model_name)
 
-    url_registry = {
-            "HeLa": "doi:10.5281/zenodo.15587924",
-            "HeLa_focal": "doi:10.5281/zenodo.15587884",
-            "HT1080_focal": "doi:10.5281/zenodo.15632609",
-            "HT1080": "doi:10.5281/zenodo.15632636",
-            "RPE1_focal": "doi:10.5281/zenodo.15632647",
-            "RPE1": "doi:10.5281/zenodo.15632661",
-            "U2OS_focal": "doi:10.5281/zenodo.15632668",
-            "U2OS": "doi:10.5281/zenodo.15632681",
-            "general_focal": "doi:10.5281/zenodo.15707118",
-            "HeLa_dead": "doi:10.5281/zenodo.17026586",
-            "general_dead_focal": "doi:10.5281/zenodo.17178783"
-        }
-
-    weights_registry = {
-        "HeLa": (
-            "model_0040499.pth",
-            "md5:62a043db76171f947bfa45c31d7984fe"
-        ),
-        "HeLa_focal": (
-            "model_0053999.pth",
-            "md5:40eb9490f3b66894abef739c151c5bfe"
-        ),
-        "HT1080_focal": (
-            "model_0052199.pth",
-            "md5:f454095e8891a694905bd2b12a741274"
-        ),
-        "HT1080": (
-            "model_0034799.pth",
-            "md5:e5ec71a532d5ad845eb6af37fc785e82"
-        ),
-        "RPE1_focal": (
-            "model_final.pth",
-            "md5:f3cc3196470493bba24b05f49773c00e"
-        ),
-        "RPE1": (
-            "model_0048299.pth",
-            "md5:5d04462ed4d680b85fd5525d8efc0fc9"
-        ),
-        "U2OS_focal": (
-            "model_final.pth",
-            "md5:8fbe8dab57cd96e72537449eb490fa6f"
-        ),
-        "U2OS": (
-            "model_final.pth",
-            "md5:8fbe8dab57cd96e72537449eb490fa6f"
-        ),
-        "general_focal": (
-            "model_0061499.pth",
-            "md5:62e5f4be12227146f6a9841ada46526a"
-        ),       
-        "HeLa_dead": (
-            "model_0080999.pth",
-            "md5:9d286376f1b07402023e82f824b2a677"
-        ),
-        "general_dead_focal": (
-            "model_0121499.pth",
-            "md5:6e33ab492df6ca1f6b3ae468ea137728"
-        )
-
-    }
-
-    configs_registry = {
-        "HeLa": (
-            "config.yaml",
-            "md5:3e7a6a92045434e4fb7fe25b321749bb",
-            "lazy"
-        ),
-        "HeLa_focal": (
-            "config.yaml",
-            "md5:320852546ed1390ed2e8fa91008e8bf7",
-            "lazy"
-        ),
-        "HT1080_focal": (
-            "config.yaml",
-            "md5:cea383632378470aa96dc46adac5d645",
-            "lazy"
-        ),
-        "HT1080": (
-            "config.yaml",
-            "md5:71674a29e9d5daf3cc23648539c2d0c6",
-            "lazy"
-        ),
-        "RPE1_focal": (
-            "config.yaml",
-            "md5:78878450ef4805c53b433ff028416510",
-            "lazy"
-        ),
-        "RPE1": (
-            "config.yaml",
-            "md5:9abb7fcafdb953fff72db7642824202a",
-            "lazy"
-        ),
-        "U2OS_focal": (
-            "config.yaml",
-            "md5:ab202fd7e0494fce123783bf564a8cde",
-            "lazy"
-        ),
-        "U2OS": (
-            "config.yaml",
-            "md5:2ab6cd0635b02ad24bcb03371839b807",
-            "lazy"
-        ),
-        "general_focal": (
-            "config.yaml",
-            "md5:ad609c147ea2cd7d7fde0d734de2e166",
-            "lazy"
-        ),
-        "HeLa_dead": (
-            "config.yaml",
-            "md5:2bb2594730432a1cc30a6a5fd556df6b",
-            "lazy"
-        ),
-        "general_dead_focal": (
-            "config.yaml",
-            "md5:eb5281bd93b37e8505846e7b75dba596",
-            "lazy"
-        ),
-
-    }
-
-    model = pooch.create(
-        path=pooch.os_cache("cell_aap"),
-        base_url=url_registry[f"{model_name}"],
-        registry={
-            weights_registry[f"{model_name}"][0]: weights_registry[f"{model_name}"][1],
-            configs_registry[f"{model_name}"][0]: configs_registry[f"{model_name}"][1],
-        },
-    )
-
-    model_type = configs_registry[f"{model_name}"][2]
-    weights_name = weights_registry[f"{model_name}"][0]
-    config_name = configs_registry[f"{model_name}"][0]
-
-    return model, model_type, weights_name, config_name
-
-
-def color_masks(
-    segmentations: np.ndarray,
-    labels,
-    method: Optional[str] = "random",
-    custom_dict: Optional[dict[int, int]] = None,
-    erode = False
-) -> np.ndarray:
-    """
-    Colors segmentation masks by a chosen method or mapping
-    -------------------------------------------------------
-    INPUTS:
-        segmentations: np.ndarray
-        labels: np.ndarray
-        method: Optional[str]
-        custom_dict: Optional[dict[int, int]]
-        erode: bool
-    OUTPUTS:
-        seg_labeled: np.ndarray
-    """
-
-    if method == "custom":
-        try:
-            assert custom_dict != None
-            assert np.isin(labels, list(custom_dict.keys())).all() == True
-        except AssertionError:
-            print('Input labels and mapping dictionary did not match when coloring movie, reverting to straight coloring')
-            method = "straight"
-
-    if segmentations.size(dim=0) == 0:
-        seg_labeled = np.zeros(
-            (segmentations.size(dim=1), segmentations.size(dim=2)), dtype="uint8"
-        )
-        return seg_labeled
-
-    seg_labeled = np.zeros_like(segmentations[0], int)
-    for i, mask in enumerate(segmentations):
-        loc_mask = seg_labeled[mask]
-        mask_nonzero = list(filter(lambda x: x != 0, loc_mask))
-        if len(mask_nonzero) < (loc_mask.shape[0] / 4):  # Roughly IOU < 0.5
-
-            if method == "custom":
-                seg_labeled[mask] += custom_dict[labels[i]]
-
-            elif method == "straight":
-                seg_labeled[mask] += labels[i]
-
-            else:
-                if erode == True:
-                    mask = binary_erosion(mask, disk(3))
-                if labels[i] == 0:
-                    seg_labeled[mask] = 2 * i
-                else:
-                    seg_labeled[mask] = 2 * i + 1
-
-    return seg_labeled
 
 def disp_inf_results(cellaap_widget) -> None:
     """

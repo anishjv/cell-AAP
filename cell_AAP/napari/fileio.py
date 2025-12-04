@@ -74,7 +74,7 @@ def grab_file(cellaap_widget: ui.cellAAPWidget):
     RETURNS:
         None
     """
-    file_filter = "TIFF (*.tiff, *.tif);; JPEG (*.jpg);; PNG (*.png)"
+    file_filter = "TIFF (*.tiff, *.tif);; JPEG (*.jpg)"
     file_names, _ = QtWidgets.QFileDialog.getOpenFileNames(
         parent=cellaap_widget,
         caption="Select file(s)",
@@ -87,14 +87,18 @@ def grab_file(cellaap_widget: ui.cellAAPWidget):
         cellaap_widget.image_path = file_names[0]  # Store the selected image path
         
         try:
-            shape = tiff.imread(file_names[0]).shape
+            shape = tiff.imread(str(file_names[0])).shape
             napari.utils.notifications.show_info(
                 f"File: {file_names[0]} is queued for inference/analysis"
             )
-            # Only set range slider for single-image mode
+            # Only set range slider for single-movie mode
             if not getattr(cellaap_widget, 'batch', False):
-                cellaap_widget.range_slider.setRange(min=0, max=shape[0] - 1)
-                cellaap_widget.range_slider.setValue((0, shape[1]))
+                if len(shape) == 3: 
+                    cellaap_widget.range_slider.setRange(min=0, max=shape[0] - 1)
+                    cellaap_widget.range_slider.setValue((0, shape[1]))
+                else:
+                    cellaap_widget.range_slider.setRange(min=0, max=0)
+                    cellaap_widget.range_slider.setValue((0, 0))
         except AttributeError or IndexError:
             napari.utils.notifications.show_error("No file was selected")
     else:
