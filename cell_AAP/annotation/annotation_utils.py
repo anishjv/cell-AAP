@@ -768,3 +768,32 @@ def square_reshape(img: npt.NDArray, desired_shape: tuple) -> npt.NDArray:
         img = binImage(img, desired_shape)
 
     return img
+
+def to_uint8(img: np.ndarray) -> np.ndarray:
+    """
+    Reliably converts any image (uint16, float, int) to uint8 (0-255).
+    -------------------------------------------------------------------
+    INPUTS:
+    	img: np.ndarray, input image to be scaled
+    OUTPUTS:
+    	img: np.ndarray, scaled image
+    """
+            
+    img = img.astype("float32")
+    # Min-Max Normalization (Contrast Stretching)
+    # This makes the darkest pixel 0 and brightest 255
+    img_min = img.min()
+    img_max = img.max()
+    
+    # Avoid division by zero if the image is solid color (e.g., all black)
+    if img_max > img_min:
+        img = (img - img_min) / (img_max - img_min) * 255.0
+    else:
+        # Image is constant value; mapping to 0 or 255 depending on intensity is risky
+        # Safer to map to 0 usually, or keep relative brightness if known.
+        img = img - img_min # becomes 0
+            
+    # 3. Clip and Cast
+    # Ensure no values fall outside 0-255 due to float rounding errors
+    img = np.clip(img, 0, 255)
+    return img.astype("uint8")

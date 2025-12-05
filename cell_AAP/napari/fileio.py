@@ -75,7 +75,7 @@ def grab_file(cellaap_widget: ui.cellAAPWidget):
         None
     """
     file_filter = "TIFF (*.tiff, *.tif);; JPEG (*.jpg)"
-    file_names, _ = QtWidgets.QFileDialog.getOpenFileNames(
+    file_names, filter = QtWidgets.QFileDialog.getOpenFileNames(
         parent=cellaap_widget,
         caption="Select file(s)",
         directory=os.getcwd(),
@@ -87,7 +87,10 @@ def grab_file(cellaap_widget: ui.cellAAPWidget):
         cellaap_widget.image_path = file_names[0]  # Store the selected image path
         
         try:
-            shape = tiff.imread(str(file_names[0])).shape
+            if 'JPEG' in filter: 
+                shape = cv2.imread(str(file_names[0]), cv2.IMREAD_GRAYSCALE).shape
+            else:
+                shape = tiff.imread(str(file_names[0])).shape
             napari.utils.notifications.show_info(
                 f"File: {file_names[0]} is queued for inference/analysis"
             )

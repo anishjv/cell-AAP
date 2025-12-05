@@ -42,7 +42,7 @@ def main():
     for i in np.arange(num_files):
         phs_file = tifffile.TiffFile(file_list[i])
         interval = [0, len(phs_file.pages)-1]
-        result = inf.run_inference(container, file_list[i], interval)
+        result = inf.run_inference(container, file_list[i], interval, keep_resized_output=True)
         inf.save(container, result)
         print(f"{file_list[i]} written!")
         print(f"{i} out of {num_files} processed")

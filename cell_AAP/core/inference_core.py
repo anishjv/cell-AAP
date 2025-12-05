@@ -21,6 +21,8 @@ from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import LazyConfig, instantiate
 import detectron2.data.transforms as T
 import torch.nn.functional as F
+import cell_AAP.annotation.annotation_utils as au  # type:ignore
+import cv2
 
 setup_logger()
 
@@ -369,21 +371,24 @@ def run_inference_on_image(
     """
 
     # 1. Capture Original Dimensions and Prepare Image
+    print(img.shape, img.dtype)
     orig_h, orig_w = img.shape[:2]
     img_original = img.copy()  # Keep a reference to the original
-    img_float = img.astype("float32")
-
+    img_uint8 = au.to_uint8(img)
+    print(img.shape, img.dtype)
     # Ensure 3-channel RGB for the transform logic (handle grayscale inputs)
-    if img_float.ndim == 2:
-        img_input = np.stack([img_float, img_float, img_float], axis=-1)
+    
+    if img_uint8.ndim == 2:
+        img_input = np.stack([img_uint8, img_uint8, img_uint8], axis=-1)
     else:
-        img_input = img_float
+        img_input = img_uint8
 
     # 2. Resize Image to Model Requirements (1024x1024)
     # We use Detectron2's transform to ensure consistency with training
     aug = T.Resize((1024, 1024))
     transform = aug.get_transform(img_input)
     img_resized = transform.apply_image(img_input)
+    print(img_resized.shape)
 
     # 3. Run Inference on Resized Image
     if model_type == "yacs":
