@@ -17,8 +17,8 @@ confluency_est = 1800 # can be in the interval (0, 2000]
 conf_threshold = .25 # can be in the interval (0, 1)
 
 # folder definition
-root_folder = Path('/nfs/turbo/umms-ajitj/anishjv/cyclinb_analysis/20251028-cycb-gsk')
-save_dir = Path('/nfs/turbo/umms-ajitj/anishjv/cyclinb_analysis/20251028-cycb-gsk')
+root_folder = Path('/nfs/turbo/umms-ajitj/anishjv/cyclinb_analysis/test')
+save_dir = Path('/nfs/turbo/umms-ajitj/anishjv/cyclinb_analysis/test')
 filter_str  = '*_phs.tif'
 
 blanks = ['G', 'H']
