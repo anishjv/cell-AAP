@@ -62,7 +62,7 @@ def display_current_result(widget) -> None:
                             ncols = arr.shape[-1]
                             if ncols == 2:
                                 points = np.stack([arr[:, 1], arr[:, 0]], axis=1).astype(float)
-                                widget.viewer.add_points(points, name="Prompts (points)", size=6, face_color='red', edge_color='black')
+                                widget.viewer.add_points(points, name="Prompts (points)", size=6, face_color='red')
                             elif ncols == 4:
                                 # Boxes [x1, y2, x2, y1] -> rectangle corners
                                 shapes = []
