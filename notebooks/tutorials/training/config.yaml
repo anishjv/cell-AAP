@@ -2,7 +2,7 @@ dataloader:
   evaluator: {_target_: detectron2.evaluation.COCOEvaluator, dataset_name: '${..test.dataset.names}', max_dets_per_image: 2000}
   test:
     _target_: detectron2.data.build_detection_test_loader
-    dataset: {_target_: detectron2.data.get_detection_dataset_dicts, filter_empty: false, names: HeLa_test_0.2}
+    dataset: {_target_: detectron2.data.get_detection_dataset_dicts, filter_empty: false, names: example_dataset_test}
     mapper:
       _target_: detectron2.data.DatasetMapper
       image_format: ${...train.mapper.image_format}
@@ -10,7 +10,7 @@ dataloader:
     num_workers: 4
   train:
     _target_: detectron2.data.build_detection_train_loader
-    dataset: {_target_: detectron2.data.get_detection_dataset_dicts, names: HeLa_train_0.2}
+    dataset: {_target_: detectron2.data.get_detection_dataset_dicts, names: example_dataset_train}
     mapper:
       _target_: detectron2.data.DatasetMapper
       augmentations:
@@ -140,7 +140,7 @@ model:
       pooler_type: ROIAlignV2
       sampling_ratio: 0
       scales: [0.25, 0.125, 0.0625, 0.03125]
-    num_classes: 3
+    num_classes: 1
     positive_fraction: 0.25
     proposal_matcher:
       _target_: detectron2.modeling.matcher.Matcher
@@ -167,11 +167,11 @@ optimizer:
   weight_decay: 0.1
 train:
   amp: {enabled: true}
-  checkpointer: {max_to_keep: 100, period: 13500}
+  checkpointer: {max_to_keep: 100, period: 200}
   ddp: {broadcast_buffers: false, find_unused_parameters: false, fp16_compression: true}
   device: cuda
-  eval_period: 6750
+  eval_period: 100
   init_checkpoint: detectron2://ImageNetPretrained/MAE/mae_pretrain_vit_large.pth?matching_heuristics=True
   log_period: 20
-  max_iter: 135000
+  max_iter: 1200
   output_dir: /arbitrary/path/where/you/want/your/model/saved
