@@ -174,4 +174,4 @@ train:
   init_checkpoint: detectron2://ImageNetPretrained/MAE/mae_pretrain_vit_large.pth?matching_heuristics=True
   log_period: 20
   max_iter: 1200
-  output_dir: /arbitrary/path/where/you/want/your/model/saved
+  output_dir: /path/to/desired/saving/destination
